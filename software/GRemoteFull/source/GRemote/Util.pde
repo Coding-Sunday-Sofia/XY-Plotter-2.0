@@ -12,8 +12,36 @@ class EnumXYZ
 
 class EnumAZ
 {
-  public String strVal[] = {"A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"};
-  public int A = 0; 
+  public String strVal[] = {
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "I",
+    "J",
+    "K",
+    "L",
+    "M",
+    "N",
+    "O",
+    "P",
+    "Q",
+    "R",
+    "S",
+    "T",
+    "U",
+    "V",
+    "W",
+    "X",
+    "Y",
+    "Z"
+  };
+
+  public int A = 0;
   public int B = 1;
   public int C = 2;
   public int D = 3;
@@ -39,34 +67,27 @@ class EnumAZ
   public int X = 23;
   public int Y = 24;
   public int Z = 25;
+
   int size() {return 26;}
   int toXYZ(int idx) {return idx-23;}
 }
 
-boolean isInteger( String input )
-{  
-   try  
-   {  
-      Integer.parseInt( input );  
-      return true;  
-   }  
-   catch(Exception e)  
-   {  
-      return false;  
-   }  
+boolean isInteger(String input) {
+   try {
+      Integer.parseInt( input );
+      return true;
+   } catch (Exception e) {
+      return false;
+   }
 }
 
-boolean isFloat( String input )
-{  
-   try  
-   {  
-      Float.parseFloat( input );  
-      return true;  
-   }  
-   catch(Exception e)  
-   {  
-      return false;  
-   }  
+boolean isFloat( String input ) {
+   try {
+      Float.parseFloat( input );
+      return true;
+   } catch(Exception e) {
+      return false;
+   }
 }
 
 float[] polar2cartesian(float r, float t) {
@@ -89,4 +110,3 @@ int[] intCoord(float[] f) {
   for (int i=0; i<f.length; i++) I[i] = intCoord(f[i]);
   return I;
 }
-

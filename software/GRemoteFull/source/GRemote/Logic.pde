@@ -4,80 +4,101 @@
 String[] gcode_sequence;
 int next_gcode_line = 0;
 
-class GCodeCommand
-{
+class GCodeCommand {
   EnumAZ idx = new EnumAZ();
+
   public int G = (int)'G';
   public int M = (int)'M';
   public int NOP = (int)' ';
   public int command = 0;
   public int code = 0;
-  
+
   public boolean has[];
   public float value[];
-  
-  public GCodeCommand() { 
+
+  public GCodeCommand() {
     init();
   }
 
-  public GCodeCommand(String s) { 
+  public GCodeCommand(String s) {
     init();
     parse(s);
   }
-  
-  public GCodeCommand(char command, int code) { 
+
+  public GCodeCommand(char command, int code) {
     init();
-    if (command == 'G' || command == 'M') { this.command = (int)command; this.code = code; }
+    if (command == 'G' || command == 'M') {
+      this.command = (int)command;
+      this.code = code;
+    }
   }
-  
+
   void init() {
     command = this.NOP;
     has = new boolean[this.idx.size()]; value = new float[this.idx.size()];
-    for(int i=0; i<has.length; i++) this.has[i] = false;
+    for (int i = 0; i < has.length; i++) {
+      this.has[i] = false;
+    }
   }
 
   void set(int idx, float value) {
     this.value[idx] = value;
     this.has[idx] = true;
   }
-  
+
   public String render() {
     String out = "";
-    int renderFirst[] = { idx.X, idx.Y, idx.Z, idx.I, idx.J, idx.K, idx.F };
+
+    int renderFirst[] = {idx.X, idx.Y, idx.Z, idx.I, idx.J, idx.K, idx.F};
     boolean RenderedYet[] = new boolean[idx.size()];
-    for(int i=0; i<RenderedYet.length; i++) RenderedYet[i] = false;
-    
-    if (this.command == this.G) { out = "G" + this.code; RenderedYet[idx.G] = true; }
-    if (this.command == this.M) { out = "M" + this.code; RenderedYet[idx.M] = true; }
-    
-    for (int i=0; i<renderFirst.length; i++) {
+
+    for (int i = 0; i < RenderedYet.length; i++) {
+      RenderedYet[i] = false;
+    }
+
+    if (this.command == this.G) {
+      out = "G" + this.code;
+      RenderedYet[idx.G] = true;
+    }
+
+    if (this.command == this.M) {
+      out = "M" + this.code;
+      RenderedYet[idx.M] = true;
+    }
+
+    for (int i = 0; i < renderFirst.length; i++) {
       if (this.has[renderFirst[i]]) {
         out += (" " + idx.strVal[renderFirst[i]] + this.value[renderFirst[i]]);
         RenderedYet[renderFirst[i]] = true;
       }
     }
-    for (int i=0; i<RenderedYet.length; i++) {
+
+    for (int i = 0; i < RenderedYet.length; i++) {
       if (this.has[i] && !RenderedYet[i]) {
         out += (" " + idx.strVal[i] + this.value[i]);
         RenderedYet[i] = true;
       }
-    }    
+    }
     return out;
   }
-  
+
   void parse(String cmd) {
     StringTokenizer st = new StringTokenizer(cmd);
-    String token = ""; 
-    while(st.hasMoreTokens()) {
+    String token = "";
+
+    while (st.hasMoreTokens()) {
       token = st.nextToken();
 //      println(token);
       if (token.substring(0,1).toUpperCase().equals("G")) {
-        this.command = (int)'G'; this.code = Integer.parseInt(token.substring(1));
+        this.command = (int)'G';
+        this.code = Integer.parseInt(token.substring(1));
       }
+
       if (token.substring(0,1).toUpperCase().equals("M")) {
-        this.command = (int)'M'; this.code = Integer.parseInt(token.substring(1));
+        this.command = (int)'M';
+        this.code = Integer.parseInt(token.substring(1));
       }
-      // there could be other commands e.g. F10 set feedrate 
+      // there could be other commands e.g. F10 set feedrate
       if (this.command != this.NOP)
         for(int i=0; i<this.idx.size(); i++)
           if (token.substring(0,1).toUpperCase().equals(this.idx.strVal[i])) { this.has[i] = true; this.value[i] = Float.parseFloat(token.substring(1)); }
@@ -107,18 +128,17 @@ void send_file(File f) {
 // send next line of gcode_sequence indexed by next_gcode_line
 // subsequent send_next_line() will be called by eventSerial upon receiving 'ok' response and looking at the state
 void send_next_line() {
-
   // check state
   if (!SendingSequence || WaitingForResponse) return;
- 
+
   // check EOF and skip empty lines
   while (true) {
     if (gcode_sequence.length == next_gcode_line) { // EOF
-      SequenceLastLineSent = true; 
+      SequenceLastLineSent = true;
 //      SendingSequence = false;
 //      println("Done sending sequence"); console_println("Done sending sequence");
-      return; 
-    } 
+      return;
+    }
     if (gcode_sequence[next_gcode_line].trim().equals("")) next_gcode_line++; // skip empty
     else break;
   }
@@ -146,9 +166,9 @@ void process_command(String s) {
       case 1:
       case 2:
       case 3:
-        for (int i=0; i<xyz.size(); i++)
-          if (cmd.has[xyz.toAZ(xyz.X+i)]) position[xyz.X+i] = G_AbsoluteMode? intCoord(cmd.value[xyz.toAZ(xyz.X+i)]) : (position[xyz.X+i] + intCoord(cmd.value[xyz.toAZ(xyz.X+i)]));
-        break;        
+        for (int i = 0; i < xyz.size(); i++)
+          if (cmd.has[xyz.toAZ(xyz.X + i)]) position[xyz.X + i] = G_AbsoluteMode? intCoord(cmd.value[xyz.toAZ(xyz.X + i)]) : (position[xyz.X + i] + intCoord(cmd.value[xyz.toAZ(xyz.X + i)]));
+        break;
 
       // Intercept absolute and inch mode commands and change state
       // Return false to avoid duplicate command from toggles triggered by state change, unless state doesn't change
@@ -178,13 +198,13 @@ void process_command(String s) {
     }
 //    println("position = X"+floatCoord(position[xyz.X])+" Y"+floatCoord(position[xyz.Y])+" Z"+floatCoord(position[xyz.Z]));
   }
-  
+
   // write string to port and consoles
   port.write(s + "\r\n"); println("<= " + s); console_println("< " + s);
   // set waiting state
   WaitingForResponse = true;
   // Todo: intercept tool change commands and enter Paused state
-  
+
 }
 
 // initial sequence following port selection to align host state with firmware state
@@ -217,13 +237,13 @@ void homing_sequence(String axes) {
     if (homing_limit[idx.Z] == 0) { println(": limit <|>0 homes to min|max"); console_println(": limit <|>0 homes to min|max"); return; }
     axis_min = 2; axis_max = 2;
   }
-  
+
   // Always do homing in relative mode
   if (Absolute) seq = append(seq, "G91");
-  
-  for (int i=axis_min; i<=axis_max; i++) {    
+
+  for (int i=axis_min; i<=axis_max; i++) {
     // rapid positioning to infinity, rapid stop when limit switches are hit
-    if (homing_limit[i] != 0) s1 += " " + idx.strVal[i] + (homing_limit[i]>0 ? homingInfinity : -homingInfinity);    
+    if (homing_limit[i] != 0) s1 += " " + idx.strVal[i] + (homing_limit[i]>0 ? homingInfinity : -homingInfinity);
     // rapid move to future zero
     if (homing_limit[i] != 0) s2 += " " + idx.strVal[i] + (-homing_limit[i]);
     // slow move aiming to overshoot limit switches by x2; stop exactly at limit switches
@@ -231,7 +251,7 @@ void homing_sequence(String axes) {
     // set zero if requested
     if (homing_limit[i] != 0) s4 += " " + idx.strVal[i] + "0";
   }
-  
+
   // compose and run sequence
   seq = append(seq, s1);
   seq = append(seq, s2);
@@ -254,7 +274,7 @@ String jog_string(int jog[], boolean Absolute, boolean RenderZero) {
   String gcode = RapidPositioning? "G0":"G1";
   float minFeed = 0;
   int totaljog = 0;
-  
+
   for (i=0; i<feed.length; i++) minFeed += feed[i];
   for (i=0; i<jog.length; i++)
     if (jog[i] != 0 || RenderZero) {
@@ -284,16 +304,16 @@ String arc_string(boolean CCW, float R, float start, float end, boolean Absolute
   gcode += " I" + floatCoord(- start_xy[idx.X]);
   gcode += " J" + floatCoord(- start_xy[idx.Y]);
 
-  float minFeed = 0;  
+  float minFeed = 0;
   for (i=0; i<feed.length; i++) minFeed += feed[i];
   for (i=0; i<2; i++) if (feed[i] < minFeed) minFeed = feed[i];
   if (!RapidPositioning && (minFeed != lastFeed)) gcode += (" F" + minFeed);
-  
+
 //  println(gcode);
   return gcode;
 }
 
-String zero_string() { 
+String zero_string() {
   String s = "ZERO:";
   s += " X" + (G_AbsoluteMode? "0.0" : floatCoord(-position[idx.X]));
   s += " Y" + (G_AbsoluteMode? "0.0" : floatCoord(-position[idx.Y]));
@@ -306,6 +326,5 @@ String mem_string() {
   s += memorySet[idx.X]? (" X"+ floatCoord(G_AbsoluteMode? memory[idx.X] : memory[idx.X]-position[idx.X])) : "";
   s += memorySet[idx.Y]? (" Y"+ floatCoord(G_AbsoluteMode? memory[idx.Y] : memory[idx.Y]-position[idx.Y])) : "";
   s += memorySet[idx.Z]? (" Z"+ floatCoord(G_AbsoluteMode? memory[idx.Z] : memory[idx.Z]-position[idx.Z])) : "";
-  return s; 
+  return s;
 }
-

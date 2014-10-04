@@ -68,7 +68,7 @@ boolean MemMode = false;
 void setup() {
   size(400,700);
   smooth();
-  
+
   cP5 = new ControlP5(this);
   cP5.setColorForeground(0xff00aa00);
   cP5.setColorBackground(0xff006600);
@@ -85,9 +85,9 @@ void setup() {
   memorySet = new boolean[idx.size()];
   feed = new float[idx.size()];
   homing_limit = new float[idx.size()];
-  
+
   // init
-  for (int i=0; i<idx.size(); i++) {
+  for (int i = 0; i < idx.size(); i++) {
     position[i] = 0;
     jog[i] = resolution;
     accumulated_jog[i] = 0;
@@ -96,27 +96,27 @@ void setup() {
     homing_limit[i] = 0;
   }
 
-  setup_console(10,35,150,150);  
+  setup_console(10,35,150,150);
   setup_func_buttons(10,185);
   setup_toggles(10,218);
   setup_jog_buttons(10,440);
-  
-  setup_jog_controls(10,295,50); 
-  setup_homing_controls(10,305,40); 
-  setup_arc_controls(10,315,30); 
-  
-  setup_port_selector(30,25,180,130); 
+
+  setup_jog_controls(10,295,50);
+  setup_homing_controls(10,305,40);
+  setup_arc_controls(10,315,30);
+
+  setup_port_selector(30,25,180,130);
   setup_port_led(10,10);
-    
+
 }
 
 // draw loop
-void draw() { 
+void draw() {
   background(0x00000000);  // background
   update_console();
   update_port_led();
-  update_toggles(); 
-  update_func_buttons(); 
+  update_toggles();
+  update_func_buttons();
   update_jog_buttons();
   update_jog_controls();
   update_homing_controls();
@@ -137,15 +137,15 @@ void controlEvent(ControlEvent theEvent) {
   // because only permitted (for current state) elements are available in the UI,
   // we assume that if we received an event, we can handle it without checking state
   // the above is not true for keypresses, where state has to be explicitly checked before handling event
-    
-  if(theEvent.isGroup()) { 
 
-    
+  if (theEvent.isGroup()) {
+
+
     // baud rate selected
-    if(theEvent.group().name()=="BAUD") { baudrate = (int)theEvent.group().value(); println("baud="+baudrate); return; }
+    if (theEvent.group().name() == "BAUD") { baudrate = (int)theEvent.group().value(); println("baud="+baudrate); return; }
 
     // serial port selected
-    if(theEvent.group().name()=="PORT") {
+    if (theEvent.group().name() == "PORT") {
       if (port != null) port.stop();
 
       try { port = new Serial(this, Serial.list()[(int)theEvent.group().value()], baudrate); }
@@ -163,21 +163,21 @@ void controlEvent(ControlEvent theEvent) {
     }
 
     // jog setting selected
-    if(theEvent.group().name()=="JOG X") {
+    if (theEvent.group().name() == "JOG X") {
       i = (int)theEvent.group().value();
       jog[idx.X] = intCoord(FractionalJog ? jog_frac_value[i] : jog_dec_value[i]);
 //      println(jog[idx.X]);
       // store current jog dropdown values - workaround to enable inc/dec of jog values with keyboard shortcut (dropdownlist doesn't seem to have .setValue)
       jog_ddl_idx[idx.X] = i; jog_ddl_frac[idx.X] = FractionalJog;
     }
-    if(theEvent.group().name()=="JOG Y") {
+    if (theEvent.group().name() == "JOG Y") {
       i = (int)theEvent.group().value();
       jog[idx.Y] = intCoord(FractionalJog ? jog_frac_value[i] : jog_dec_value[i]);
 //      println(jog[idx.Y]);
       // store current jog dropdown values - workaround to enable inc/dec of jog values with keyboard shortcut (dropdownlist doesn't seem to have .setValue)
       jog_ddl_idx[idx.Y] = i; jog_ddl_frac[idx.Y] = FractionalJog;
     }
-    if(theEvent.group().name()=="JOG Z") {
+    if (theEvent.group().name() == "JOG Z") {
       i = (int)theEvent.group().value();
       jog[idx.Z] = intCoord(FractionalJog ? jog_frac_value[i] : jog_dec_value[i]);
 //      println(jog[idx.Z]);
@@ -186,47 +186,47 @@ void controlEvent(ControlEvent theEvent) {
     }
 
   }
-  
-  if(theEvent.isController()) { 
-   
+
+  if (theEvent.isController()) {
+
 //    print("control event from controller: "+theEvent.controller().name());
 //    println(", value : "+theEvent.controller().value());
 
     // manually entered command
-    if(theEvent.controller().name() == "GCODE") {
+    if (theEvent.controller().name() == "GCODE") {
       s = theEvent.controller().stringValue().toUpperCase();
       HaveStringToSend = true; // UI_ClearFocusTF = true;
     }
-    
+
     // absolute mode toggle
-    if(theEvent.controller().name() == "absolute_mode") {
+    if (theEvent.controller().name() == "absolute_mode") {
       s = ((int)theEvent.controller().value() == 1) ? "G90" : "G91";
       HaveStringToSend = true;
     }
 
     // inch mode toggle
-    if(theEvent.controller().name() == "inch_mode") {
+    if (theEvent.controller().name() == "inch_mode") {
       s = ((int)theEvent.controller().value() == 1) ? "G20" : "G21";
       HaveStringToSend = true;
     }
 
     // send file button
-    if(theEvent.controller().name() == "SEND FILE") {
+    if (theEvent.controller().name() == "SEND FILE") {
         selectInput("Select GCode file to send","send_file");
 //      String file = selectInput("Select GCode file to send");
 //      if (file == null) return;
 //      send_file(file);
     }
-        
+
     // cancel (sending file) button
-    if(theEvent.controller().name() == "CANCEL") {
+    if (theEvent.controller().name() == "CANCEL") {
       SendingSequence = false;
       Paused = false;
       println(": send sequence cancelled"); console_println(": send sequence cancelled");
     }
 
     // pause/resume (sending file) button
-    if(theEvent.controller().name() == "PAUSE/RESUME") {
+    if (theEvent.controller().name() == "PAUSE/RESUME") {
       if (!Paused) {
         println(": send sequence paused"); console_println(": send sequence paused");
         Paused = true;
@@ -238,21 +238,21 @@ void controlEvent(ControlEvent theEvent) {
     }
 
     // jog control toggles
-    if(theEvent.controller().name() == "fractional_jog") {
+    if (theEvent.controller().name() == "fractional_jog") {
       if ((int)theEvent.controller().value() == 1) FractionalJog = true;
       else FractionalJog = false;
       UI_ReloadJogDDL = true;
     }
-    if(theEvent.controller().name() == "rapid_positioning") {
+    if (theEvent.controller().name() == "rapid_positioning") {
       if ((int)theEvent.controller().value() == 1) RapidPositioning = true;
       else { RapidPositioning = false; lastFeed = 0; }
     }
-    
-    if(theEvent.controller().name() == "FEED X") { feed[idx.X] = theEvent.controller().value(); }
-    if(theEvent.controller().name() == "FEED Y") { feed[idx.Y] = theEvent.controller().value(); }
-    if(theEvent.controller().name() == "FEED Z") { feed[idx.Z] = theEvent.controller().value(); }
 
-    if(theEvent.controller().name() == "arc_mode") {
+    if (theEvent.controller().name() == "FEED X") { feed[idx.X] = theEvent.controller().value(); }
+    if (theEvent.controller().name() == "FEED Y") { feed[idx.Y] = theEvent.controller().value(); }
+    if (theEvent.controller().name() == "FEED Z") { feed[idx.Z] = theEvent.controller().value(); }
+
+    if (theEvent.controller().name() == "arc_mode") {
       if (XYZMode || ZeroMode || MemMode) return; //UI should be locked instead of state check
       if ((int)theEvent.controller().value() == 1) {
         ArcMode = true;
@@ -262,11 +262,11 @@ void controlEvent(ControlEvent theEvent) {
       }
       open_group(ArcMode? 'A':'J');
     }
-    
-    if(theEvent.controller().name() == "xyz_mode") {
+
+    if (theEvent.controller().name() == "xyz_mode") {
       if (ArcMode || ZeroMode || MemMode) return; //UI should be locked instead of state check
       if ((int)theEvent.controller().value() == 1) {
-        for (i=0; i<accumulated_jog.length; i++) accumulated_jog[i] = 0;        
+        for (i=0; i<accumulated_jog.length; i++) accumulated_jog[i] = 0;
         XYZMode = true;
       }
       else {
@@ -274,14 +274,14 @@ void controlEvent(ControlEvent theEvent) {
         for (i=0; i<accumulated_jog.length; i++) jog_total += abs(accumulated_jog[i]);
         if (jog_total > 0) {
           s = jog_string(accumulated_jog, G_AbsoluteMode, false);
-          HaveStringToSend = true;  
+          HaveStringToSend = true;
         }
         XYZMode = false;
         UI_ClearGCodeTF = true;
       }
     }
 
-    if(theEvent.controller().name() == "zero_mode") {
+    if (theEvent.controller().name() == "zero_mode") {
       if (ArcMode || XYZMode || MemMode) return; //UI should be locked instead of state check
       if ((int)theEvent.controller().value() == 1) {
         ZeroMode = true;
@@ -292,7 +292,7 @@ void controlEvent(ControlEvent theEvent) {
       }
     }
 
-    if(theEvent.controller().name() == "mem_mode") {
+    if (theEvent.controller().name() == "mem_mode") {
       if (ArcMode || XYZMode || ZeroMode) return; //UI should be locked instead of state check
       if ((int)theEvent.controller().value() == 1) {
         MemMode = true;
@@ -302,61 +302,61 @@ void controlEvent(ControlEvent theEvent) {
         UI_ClearGCodeTF = true;
       }
     }
-    
+
     // homing controls
-    if(theEvent.controller().name() == "homing_set_zero") {
+    if (theEvent.controller().name() == "homing_set_zero") {
       if ((int)theEvent.controller().value() == 1) HomingSetZero = true;
       else HomingSetZero = false;
     }
 //    println("raw: "+homing_limit[idx.X] + ", ceil: "+ceil(100*homing_limit[idx.X]) + ", floor: "+floor(100*homing_limit[idx.X]) );
-    if(theEvent.controller().name() == "homing_limit_x") homing_limit[idx.X] = theEvent.controller().value();
-    if(theEvent.controller().name() == "homing_limit_y") homing_limit[idx.Y] = theEvent.controller().value();
-    if(theEvent.controller().name() == "homing_limit_z") homing_limit[idx.Z] = theEvent.controller().value();
+    if (theEvent.controller().name() == "homing_limit_x") homing_limit[idx.X] = theEvent.controller().value();
+    if (theEvent.controller().name() == "homing_limit_y") homing_limit[idx.Y] = theEvent.controller().value();
+    if (theEvent.controller().name() == "homing_limit_z") homing_limit[idx.Z] = theEvent.controller().value();
     // fix for values returned by controller - they often have many decimals (accumulated errors from float/double additions/subtractions?)
     for (i = 0; i<idx.size(); i++) homing_limit[i] = (homing_limit[i]>=0)? floor(homing_limit[i]*100)/100.0 : ceil(homing_limit[i]*100)/100.0;
-    if(theEvent.controller().name() == "homing_infinity") homingInfinity = theEvent.controller().value();
-    if(theEvent.controller().name() == "homing_feed") homingFeed = theEvent.controller().value();
+    if (theEvent.controller().name() == "homing_infinity") homingInfinity = theEvent.controller().value();
+    if (theEvent.controller().name() == "homing_feed") homingFeed = theEvent.controller().value();
     // home XY & Z buttons
-    if(theEvent.controller().name() == "HOME XY") {
+    if (theEvent.controller().name() == "HOME XY") {
       homing_sequence("XY");
     }
-    if(theEvent.controller().name() == "HOME Z") {
+    if (theEvent.controller().name() == "HOME Z") {
       homing_sequence("Z");
-    }    
+    }
 
     // arc controls
-    if(theEvent.controller().name() == "ARC_CCW") {
+    if (theEvent.controller().name() == "ARC_CCW") {
       if ((int)theEvent.controller().value() == 1) ArcCCW = true;
       else ArcCCW = false;
     }
-    if(theEvent.controller().name() == "ARC_RADIUS") {
+    if (theEvent.controller().name() == "ARC_RADIUS") {
       f = arc_radius;
-      arc_radius = isFloat(theEvent.controller().stringValue()) ? Float.parseFloat(theEvent.controller().stringValue()) : arc_radius; 
+      arc_radius = isFloat(theEvent.controller().stringValue()) ? Float.parseFloat(theEvent.controller().stringValue()) : arc_radius;
       if (arc_radius <=0) arc_radius = f;
       UI_ReloadArcTF = true;
       UI_ClearFocusTF = true;
     }
-    if(theEvent.controller().name() == "ARC_START") {
+    if (theEvent.controller().name() == "ARC_START") {
       f = arc_start;
-      arc_start = isFloat(theEvent.controller().stringValue()) ? Float.parseFloat(theEvent.controller().stringValue()) : arc_start; 
+      arc_start = isFloat(theEvent.controller().stringValue()) ? Float.parseFloat(theEvent.controller().stringValue()) : arc_start;
       if (arc_start <0 || arc_start >= 360 || arc_start >= arc_end) arc_start = f;
       UI_ReloadArcTF = true;
       UI_ClearFocusTF = true;
     }
-    if(theEvent.controller().name() == "ARC_END") { 
+    if (theEvent.controller().name() == "ARC_END") {
       f = arc_end;
-      arc_end = isFloat(theEvent.controller().stringValue()) ? Float.parseFloat(theEvent.controller().stringValue()) : arc_end; 
+      arc_end = isFloat(theEvent.controller().stringValue()) ? Float.parseFloat(theEvent.controller().stringValue()) : arc_end;
       if (arc_end <=0 || arc_end > 360 || arc_start >= arc_end) arc_end = f;
-      UI_ReloadArcTF = true; 
+      UI_ReloadArcTF = true;
       UI_ClearFocusTF = true;
     }
 
     // jog button events
-    if (theEvent.controller().name() == "X+") { 
+    if (theEvent.controller().name() == "X+") {
       j[idx.X] = jog[idx.X];
       if (XYZMode) { accumulated_jog[idx.X] += jog[idx.X]; return; }
       if (ZeroMode) j[idx.X] = -position[idx.X];
-      if (MemMode) 
+      if (MemMode)
         if (memorySet[idx.X]) j[idx.X] = memory[idx.X] - position[idx.X];
         else return;
       if (ArcMode) {
@@ -367,7 +367,7 @@ void controlEvent(ControlEvent theEvent) {
       if (ZeroMode) { ZeroMode = false; UI_ClearGCodeTF = true; }
       if (MemMode) { MemMode = false; UI_ClearGCodeTF = true; }
     }
-    if (theEvent.controller().name() == "X-") { 
+    if (theEvent.controller().name() == "X-") {
       j[idx.X] = -jog[idx.X];
       if (XYZMode) { accumulated_jog[idx.X] -= jog[idx.X]; return; }
       if (MemMode) { memory[idx.X] = position[idx.X]; memorySet[idx.X] = true; return; }
@@ -377,15 +377,15 @@ void controlEvent(ControlEvent theEvent) {
         HaveStringToSend = true;
       } else {
         s = ZeroMode ? "G92 X0" : jog_string(j, G_AbsoluteMode, RenderZero);
-        HaveStringToSend = true; 
+        HaveStringToSend = true;
       }
 //      if (ZeroMode) { ZeroMode = false; UI_ClearGCodeTF = true; }
     }
-    if (theEvent.controller().name() == "Y+") { 
+    if (theEvent.controller().name() == "Y+") {
       j[idx.Y] = jog[idx.Y];
       if (XYZMode) { accumulated_jog[idx.Y] += jog[idx.Y]; return; }
       if (ZeroMode) j[idx.Y] = -position[idx.Y];
-      if (MemMode) 
+      if (MemMode)
         if (memorySet[idx.Y]) j[idx.Y] = memory[idx.Y] - position[idx.Y];
         else return;
       if (ArcMode) {
@@ -396,7 +396,7 @@ void controlEvent(ControlEvent theEvent) {
       if (ZeroMode) { ZeroMode = false; UI_ClearGCodeTF = true; }
       if (MemMode) { MemMode = false; UI_ClearGCodeTF = true; }
     }
-    if (theEvent.controller().name() == "Y-") { 
+    if (theEvent.controller().name() == "Y-") {
       j[idx.Y] = -jog[idx.Y];
       if (XYZMode) { accumulated_jog[idx.Y] -= jog[idx.Y]; return; }
       if (MemMode) { memory[idx.Y] = position[idx.Y]; memorySet[idx.Y] = true; return; }
@@ -406,15 +406,15 @@ void controlEvent(ControlEvent theEvent) {
         HaveStringToSend = true;
       } else {
         s = ZeroMode ? "G92 Y0" : jog_string(j, G_AbsoluteMode, RenderZero);
-        HaveStringToSend = true; 
+        HaveStringToSend = true;
       }
 //      if (ZeroMode) { ZeroMode = false; UI_ClearGCodeTF = true; }
     }
-    if (theEvent.controller().name() == "Z+") { 
+    if (theEvent.controller().name() == "Z+") {
       j[idx.Z] = jog[idx.Z];
       if (XYZMode) { accumulated_jog[idx.Z] += jog[idx.Z]; return; }
       if (ZeroMode) j[idx.Z] = -position[idx.Z];
-      if (MemMode) 
+      if (MemMode)
         if (memorySet[idx.Z]) j[idx.Z] = memory[idx.Z] - position[idx.Z];
         else return;
       if (j[idx.Z] != 0) { s = jog_string(j, G_AbsoluteMode, RenderZero); HaveStringToSend = true; }
@@ -422,22 +422,22 @@ void controlEvent(ControlEvent theEvent) {
       if (ZeroMode) { ZeroMode = false; UI_ClearGCodeTF = true; }
       if (MemMode) { MemMode = false; UI_ClearGCodeTF = true; }
     }
-    if (theEvent.controller().name() == "Z-") { 
+    if (theEvent.controller().name() == "Z-") {
       j[idx.Z] = -jog[idx.Z];
       if (XYZMode) { accumulated_jog[idx.Z] -= jog[idx.Z]; return; }
       if (MemMode) { memory[idx.Z] = position[idx.Z]; memorySet[idx.Z] = true; return; }
       s = ZeroMode ? "G92 Z0" : jog_string(j, G_AbsoluteMode, RenderZero);
-      HaveStringToSend = true; 
+      HaveStringToSend = true;
 //      if (ZeroMode) { ZeroMode = false; UI_ClearGCodeTF = true; }
     }
-    
+
     if (HaveStringToSend) {
       HaveStringToSend = false;
       if (WaitingForResponse) { delay(50); } // wait a bit
       if (WaitingForResponse) { java.awt.Toolkit.getDefaultToolkit().beep(); return; } // beep & exit if still no response from port
       process_command(s);
     }
-  }  
+  }
 }
 
 // keyboard events
@@ -446,14 +446,14 @@ void keyPressed() {
   String s = "";
   if (!(PortResponding && (!SendingSequence || SendingSequence && Paused))) return;
   if (((Textfield)cP5.controller("GCODE")).isFocus()) return; // do not process keystrokes while editing GCode
-  
+
   if (key == 'j' || key == 'J') open_group('J');
   if (key == 'h' || key == 'H') open_group('H');
   if (key == 'a' || key == 'A') open_group('A');
 
   if (key == '+') { feed[idx.X] += feedInc; feed[idx.Y] += feedInc; }
   if (key == '-') { feed[idx.X] -= feedInc; feed[idx.Y] -= feedInc; }
-  
+
   if (Jogging_grp.isOpen()) {
     if (key == 'x')
       if (jog_ddl_idx[idx.X] > 0) {
@@ -469,7 +469,7 @@ void keyPressed() {
         jog[idx.X] = intCoord(jog_ddl_frac[idx.X] ? jog_frac_value[jog_ddl_idx[idx.X]] : jog_dec_value[jog_ddl_idx[idx.X]]);
 //        println(jog[idx.X]);
       }
-      
+
     if (key == 'y')
       if (jog_ddl_idx[idx.Y] > 0) {
         jog_ddl_idx[idx.Y] -= 1;
@@ -484,7 +484,7 @@ void keyPressed() {
         jog[idx.Y] = intCoord(jog_ddl_frac[idx.Y] ? jog_frac_value[jog_ddl_idx[idx.Y]] : jog_dec_value[jog_ddl_idx[idx.Y]]);
 //        println(jog[idx.Y]);
       }
-      
+
     if (key == 'z')
       if (jog_ddl_idx[idx.Z] > 0) {
         jog_ddl_idx[idx.Z] -= 1;
@@ -499,7 +499,7 @@ void keyPressed() {
         jog[idx.Z] = intCoord(jog_ddl_frac[idx.Z] ? jog_frac_value[jog_ddl_idx[idx.Z]] : jog_dec_value[jog_ddl_idx[idx.Z]]);
 //        println(jog[idx.Z]);
       }
-      
+
     if (key == 'f' || key == 'F') {
       ((Toggle)cP5.controller("fractional_jog")).setValue(!FractionalJog);
     }
@@ -508,24 +508,24 @@ void keyPressed() {
     }
   }
 
-  if (key == CODED && keyCode == RIGHT) { 
+  if (key == CODED && keyCode == RIGHT) {
     ((Button)cP5.controller("X+")).setValue(ControlP5.PRESSED);
   }
-  if (key == CODED && keyCode == LEFT) { 
+  if (key == CODED && keyCode == LEFT) {
     ((Button)cP5.controller("X-")).setValue(ControlP5.PRESSED);
   }
-  if (key == CODED && keyCode == UP) { 
+  if (key == CODED && keyCode == UP) {
     ((Button)cP5.controller("Y+")).setValue(ControlP5.PRESSED);
   }
-  if (key == CODED && keyCode == DOWN) { 
+  if (key == CODED && keyCode == DOWN) {
     ((Button)cP5.controller("Y-")).setValue(ControlP5.PRESSED);
   }
-  if (key == CODED && keyCode == KeyEvent.VK_PAGE_UP) { 
+  if (key == CODED && keyCode == KeyEvent.VK_PAGE_UP) {
     ((Button)cP5.controller("Z+")).setValue(ControlP5.PRESSED);
   }
-  if (key == CODED && keyCode == KeyEvent.VK_PAGE_DOWN) { 
+  if (key == CODED && keyCode == KeyEvent.VK_PAGE_DOWN) {
     ((Button)cP5.controller("Z-")).setValue(ControlP5.PRESSED);
-  }  
+  }
   if (key == DELETE) {
     ((Toggle)cP5.controller("xyz_mode")).setValue(!XYZMode);
   }
@@ -543,14 +543,14 @@ void keyPressed() {
 // serial events
 void serialEvent(Serial port)
 {
-//  if(!SendingSequence) delay(100);
+//  if (!SendingSequence) delay(100);
   delay(10); String s = port.readString();
   println("=> "+s.trim()); console_println("> "+s.trim());
   s = s.trim().toUpperCase();
-  
+
   // process response
   // start/ok line-based protocol is supported by most reprap firmware
-  
+
   // firmware reset (not all firmware does this though)
   if (s.equals("START")) {
     println("firmware start, sending init sequence");
@@ -562,10 +562,10 @@ void serialEvent(Serial port)
   }
 
   // response to a command
-  if (s.equals("OK")) { 
+  if (s.equals("OK")) {
     WaitingForResponse = false; // let everyone know they can send more to the port
     if (SendingSequence && !Paused) send_next_line();
-    if (SendingSequence && SequenceLastLineSent) { 
+    if (SendingSequence && SequenceLastLineSent) {
       SequenceLastLineSent = false;
       SendingSequence = false;
       println(": done sending sequence"); console_println(": done sending sequence");
@@ -580,4 +580,3 @@ void serialEvent(Serial port)
     PortWasReset = false; PortResponding = true; init_sequence();
   }
 }
-
