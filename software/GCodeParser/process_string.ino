@@ -51,7 +51,7 @@ void process_string(char instruction[], int size)
 	//the character / means delete block... used for comments and stuff.
 	if (instruction[0] == '/')
 	{
-		Serial.println("ok");
+		Serial.println("OK");
 		return;
 	}
 
@@ -443,7 +443,7 @@ void process_string(char instruction[], int size)
       if(code==0&&size==1){
         Serial.println("start");
       }else{
-        Serial.println("ok");
+        Serial.println("OK");
       }
 //	Serial.println(line, DEC);
 }
