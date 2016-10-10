@@ -1,11 +1,11 @@
 #include <Servo.h>
 // define the parameters of our machine.
 float X_STEPS_PER_INCH = 48;
-float X_STEPS_PER_MM = 40;
+float X_STEPS_PER_MM = 90.90909;
 int X_MOTOR_STEPS   = 100;
 
-float Y_STEPS_PER_INCH = 48;
-float Y_STEPS_PER_MM  = 40;
+float Y_STEPS_PER_INCH = 48; // Didn't change the inches
+float Y_STEPS_PER_MM  = 90.90909; // 1000 / 11 as per http://forum.makeblock.cc/t/how-to-calculate-x-steps-per-inch-x-steps-per-mm-and-x-motor-steps/5272/3?u=charlieb
 int Y_MOTOR_STEPS   = 100;
 
 float Z_STEPS_PER_INCH = 48;
