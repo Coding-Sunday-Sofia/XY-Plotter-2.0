@@ -20,31 +20,57 @@ This procedure will use this repository but the only Makeblock software will be 
    The Arduino board will draw enough power from the USB connection to allow it to be flashed (and drive the pen servo). As soon as the board is flashed it will start to drive the big stepper motors to try and find it's zero position as part of the initialization. It's better if the moment this happens is controlled rather than just as soon as the flash finishes.
    
 1. Flash the main board with the GCodeParser using the arduino software
+
   1. Launch the Arduino software
   1. Hit File->Open and open XY-Plotter-2.0-master/software/GCodeParser/GCodeParser.ino from the location where you unzipped this repository's master.zip.
+  
   1. Connect up the main board to your computer.
+  
   1. Select the Uno board: Tools->Board->Arduino Uno
+  
   1. Select the correct port: Tools->Port->*Your port*
+  
   1. Install the two needed libraries (only needed the first time, if at all):
+  
     * Sketch->Import Library->Software Serial
+    
     * Sketch->Import Library->Servo
+    
   1. Hit the arrow button at the top left to do the upload. If this fails ask on the forums
+  
 1. Figure out which limit switches correspond to which movement axes.
-  A word about initialization: The GCodeParser firmware's init sequence consists of finding the zero position for each axis. It does this by moving slowly towards zero on one axis until it hits the limit switch. Then it steps backwards until the switch releases. This procedure is then repeated for the other axis. We're going to use this procedure to figure out if the limit switches are wired correctly.
+
+   A word about initialization: The GCodeParser firmware's init sequence consists of finding the zero position for each axis. It does this by moving slowly towards zero on one axis until it hits the limit switch. Then it steps backwards until the switch releases. This procedure is then repeated for the other axis. We're going to use this procedure to figure out if the limit switches are wired correctly.
+
   1. Manually move the carriage with the pen to the middle of the drawing area so when it starts to move there's plenty of time to react. The carriage should move fairly freely, if it doesn't then check that the power switch on the main board is off.
+
   1. Switch on the power on the main board.
+
   1. If nothing happens hit the Arduino's reset pushbutton on the side of the main board. If this still fails check that the Arduino flash succeeded then ask on the forums.
+  
   1. One of the steppers will start to move and the carriage will move in a direction.
+  
   1. Look at which limit switch it is moving towards hit the switch manually.
-    *hint:* it should be the one in the corner of the frame near the stepper motor or the one on the carridge nearest the stepper side.
+  
+   *hint:* it should be the one in the corner of the frame near the stepper motor or the one on the carridge nearest the stepper side.
+   
   1. If that stepper stops and the other one starts then that limit switch is wired correctly.
+  
   1. If it keeps going in the same direction start to hit the other limit switches until it does stop. Remember which one stopped the motion.
+  
   1. The carridge will now start to move in the other axis.
+  
   1. Figure out which limit switch it will be going for *next* and hit it.
+  
   1. If that stepper stops then that limit switch is wired correctly.
+  
     The initialization procedure is now complete but only two limit switches have been tested
+    
 1. Fix the limit switch wiring - if necessary.
-  1. From the above procedure there should be two pieces of information for each axis: the limit switch that should have stopped the motion and the one that did stop the motion.
+
+  1. From the above procedure there should be two pieces of information for each axis: the limit switch that should have 
+ stopped the motion and the one that did stop the motion.
+ 
   1. To fix the wiring, follow both of the connections all the way back to the main board and swap them.
   
     
