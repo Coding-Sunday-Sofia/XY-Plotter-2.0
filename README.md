@@ -3,14 +3,22 @@
 The package consists of the software(Arduino firmware and GRemote), structure assembly instruction and program instruction.
 ###My Unofficial Calibration Procedure
 
-This procedure will use this repository but the only Makeblock software will be in the XY-Plotter-2.0/software/GCodeParser
+This procedure will use this repository but the only Makeblock software will be in the `XY-Plotter-2.0/software/GCodeParser`
+
 1. Download and install/unzip the following pieces of software
+
   * [The Arduino software for programming the plotter main board](http://arduino.cc/en/Main/Software)
+
   * [This repository](https://github.com/charlieb/XY-Plotter-2.0/archive/master.zip)
+  
   * [The Universal GCode Sender](http://winder.github.io/ugs_website/)
+  
   * [This software requires Java 7+](https://www.java.com/en/download/)
+
 1. Make sure that the main power to the board is either unplugged or the switch is turned off
-  The Arduino board will draw enough power from the USB connection to allow it to be flashed (and drive the pen servo). As soon as the board is flashed it will start to drive the big stepper motors to try and find it's zero position as part of the initialization. It's better if the moment this happens is controlled rather than just as soon as the flash finishes.
+
+   The Arduino board will draw enough power from the USB connection to allow it to be flashed (and drive the pen servo). As soon as the board is flashed it will start to drive the big stepper motors to try and find it's zero position as part of the initialization. It's better if the moment this happens is controlled rather than just as soon as the flash finishes.
+   
 1. Flash the main board with the GCodeParser using the arduino software
   1. Launch the Arduino software
   1. Hit File->Open and open XY-Plotter-2.0-master/software/GCodeParser/GCodeParser.ino from the location where you unzipped this repository's master.zip.
