@@ -73,6 +73,31 @@ This procedure will use this repository but the only Makeblock software will be 
  
   1. To fix the wiring, follow both of the connections all the way back to the main board and swap them.
   
+1. Use the Universal GCode Sender (UGS forthwith) to make the first g-code moves.
+
+  1. Start UGS
+  
+  1. In the top left Connection box, select the right port for the Arduino, 115200 for Baud and grbl for firmware. Hit Open.
+  
+  1. The plotter will reset and go through its init routing again. Since the two zero limit switches are now wired correctly this should succeed and in the console tab at the bottom you should eventually see "Grbl 0.8".
+  
+  note: this firmware is not grbl nor associated with grbl. This message is just to allow UGS to realize that initialization is complete.
+  
+  1. Now we make the first g-code move:
+  
+    1. In the Command tab at the top right enter `G01 X100 Y100 Z10` and hit enter. This commands the plotter to move 100 units (supposed to me mm but it depends on the dip switches and the software multipliers) in X and Y and to halfway retract the pen.
+    
+    1. Watch the plotter move but not very far. Experience wonder. When the move is finished you should see an `ok` in the console tab at the bottom.
+  
+1. Check the limit switches using g-code moves.
+
+  1. Enter `G01 X300`, when the plotter is moving figure out which limit switch stops it.
+    
+  1. Enter `G01 Y300`, when the plotter is moving figure out which limit switch stops it.
+    
+  1. If the limit switches are wrong, swap them at the main board.
+    
+  The plotter should now be able to make arbitrary g-code moves.
     
 ###Brief Procedure
 
