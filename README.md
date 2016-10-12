@@ -98,7 +98,59 @@ This procedure will use this repository but the only Makeblock software will be 
   1. If the limit switches are wrong, swap them at the main board.
     
   The plotter should now be able to make arbitrary g-code moves.
+  
+1. **Calibrate Distances so g-code units are mm**
+
+  There are two parts to this procedure: measurement and software change. First measure the real, on paper length of a 200 unit move then use that information to adjust the constants in the software so everything is correctly to scale.
+  
+  1. Set the two stepper motor driver board micro-switches to the same setting. I favour HHH for the smallest, most accurate but slowest stepping.
+  
+  ![switch](http://forum.makeblock.cc/uploads/default/optimized/2X/f/fbb2f4cfb0dcb5be99e59b8e6d59128634542990_1_564x500.gif "Stepper Driver Board micro switches")
+   
+   | MS1 | MS2 | MS3 | micro step |
+   |-----|-----|-----|------------|
+   |  L  |  L  |  L  | full step  |
+   |  H  |  L  |  L  | 1/2 step   |
+   |  L  |  H  |  L  | 1/4 step   |
+   |  H  |  H  |  L  | 1/8 step   |
+   |  H  |  H  |  H  | 1/16 step  |
+   
+  1. Move the pen to a nice starting location. `G01 X50 Y50 Z10`
+  
+  1. Put the pen down before starting the move. `G01 Z34`
+  
+  1. Make a big move in only one axis. `G01 X250` You might have to try a few times to get a nice big move without hitting the limit switches or going off the paper.
+  
+  1. Measure the length of the line as accurately as you can. I fell like I can get to about 0.5mm accuracy.
+  
+  1. There are three values in play here:
+  
+    1. The current firmware's steps per mm value
+    1. The requested move size in mm
+    1. Our measured value in mm
     
+  We want to find the correct number of steps per mm which is likely to be different than the firmware's number.
+    
+  In General:
+    number of steps moved = steps per mm * move size (mm)
+  
+  So:
+    number of steps moved = firmware's steps per mm (1) * actual move size (3)
+    
+  and:
+  
+    number of steps moved = correct steps per mm * requested move size (2)
+    
+  therefore:
+    
+    correct steps per mm * requested move size (2) = firmware's steps per mm (1) * actual move size (3)
+    
+    correct steps per mm = firmware's steps per mm (1) * actual move size (3) / requested move size (2)
+   
+  1. Take the value you calculated and put it as the value on https://github.com/charlieb/XY-Plotter-2.0/blob/master/software/GCodeParser/GCodeParser.ino lines 3 and 8.
+  
+  1. Reflash the firmware and run the calibration procedure again. You should have a line length that is very close to what you requested in the g-code.
+   
 ###Brief Procedure
 
 1. Download and install Arduino-1.0.5，http://arduino.cc/en/Main/Software
