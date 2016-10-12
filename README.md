@@ -132,20 +132,22 @@ This procedure will use this repository but the only Makeblock software will be 
   We want to find the correct number of steps per mm which is likely to be different than the firmware's number.
     
   In General:
+  
     number of steps moved = steps per mm * move size (mm)
   
   So:
-    number of steps moved = firmware's steps per mm (1) * actual move size (3)
+  
+    number of steps moved = firmware's steps per mm (1) * requested move size (3)
     
   and:
   
-    number of steps moved = correct steps per mm * requested move size (2)
+    number of steps moved = correct steps per mm * actual move size (2)
     
   therefore:
     
-    correct steps per mm * requested move size (2) = firmware's steps per mm (1) * actual move size (3)
+    correct steps per mm * actual move size (2) = firmware's steps per mm (1) * requested move size (3)
     
-    correct steps per mm = firmware's steps per mm (1) * actual move size (3) / requested move size (2)
+    correct steps per mm = firmware's steps per mm (1) * requested move size (3) / actual move size (2)
    
   1. Take the value you calculated and put it as the value on https://github.com/charlieb/XY-Plotter-2.0/blob/master/software/GCodeParser/GCodeParser.ino lines 3 and 8.
   
