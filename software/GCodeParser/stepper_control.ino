@@ -1,4 +1,6 @@
 
+// This code has been rewritten for speed by Jason Dorie
+
 //init our variables
 long max_delta;
 long x_counter;
@@ -9,75 +11,135 @@ bool y_can_step;
 bool z_can_step;
 int milli_delay;
 
+unsigned long STEP = 0;
+
+
 void init_steppers()
 {
-	//turn them off to start.
-	disable_steppers();
-	
 	//init our points.
-	current_units.x = 0.0;
-	current_units.y = 0.0;
-	current_units.z = 0.0;
-	target_units.x = 0.0;
-	target_units.y = 0.0;
-	target_units.z = 0.0;
-	
+  current_funits.x = 0;
+  current_funits.y = 0;
+  current_funits.z = 0;
+  target_funits.x = 0;
+  target_funits.y = 0;
+  target_funits.z = 0;
+
+
 	pinMode(X_STEP_PIN, OUTPUT);
 	pinMode(X_DIR_PIN, OUTPUT);
-	pinMode(X_ENABLE_PIN, OUTPUT);
 	pinMode(X_MIN_PIN, INPUT_PULLUP);
 	pinMode(X_MAX_PIN, INPUT_PULLUP);
 	
 	pinMode(Y_STEP_PIN, OUTPUT);
 	pinMode(Y_DIR_PIN, OUTPUT);
-	pinMode(Y_ENABLE_PIN, OUTPUT);
 	pinMode(Y_MIN_PIN, INPUT_PULLUP);
 	pinMode(Y_MAX_PIN, INPUT_PULLUP);
-	
+
+  // cache all of these mappings so we can bypass DigitalWrite and DigitalRead for speed,
+  // but still keep multi-board compatibility
+
+  XSTEP_PORT = portOutputRegister( digitalPinToPort(X_STEP_PIN) );
+  XSTEP_MASK = digitalPinToBitMask(X_STEP_PIN);
+  YSTEP_PORT = portOutputRegister( digitalPinToPort(Y_STEP_PIN) );
+  YSTEP_MASK = digitalPinToBitMask(Y_STEP_PIN);
+
+  XDIR_PORT = portOutputRegister( digitalPinToPort(X_DIR_PIN) );
+  XDIR_MASK = digitalPinToBitMask(X_DIR_PIN);
+  YDIR_PORT = portOutputRegister( digitalPinToPort(Y_DIR_PIN) );
+  YDIR_MASK = digitalPinToBitMask(Y_DIR_PIN);
+
+  XMIN_PORT = portInputRegister( digitalPinToPort(X_MIN_PIN) );
+  XMIN_MASK = digitalPinToBitMask(X_MIN_PIN);
+  XMAX_PORT = portInputRegister( digitalPinToPort(X_MAX_PIN) );
+  XMAX_MASK = digitalPinToBitMask(X_MAX_PIN);
+
+  YMIN_PORT = portInputRegister( digitalPinToPort(Y_MIN_PIN) );
+  YMIN_MASK = digitalPinToBitMask(Y_MIN_PIN);
+  YMAX_PORT = portInputRegister( digitalPinToPort(Y_MAX_PIN) );
+  YMAX_MASK = digitalPinToBitMask(Y_MAX_PIN);
+
 	pinMode(Z_STEP_PIN, OUTPUT);
 	pinMode(Z_DIR_PIN, OUTPUT);
-	pinMode(Z_ENABLE_PIN, OUTPUT);
 	pinMode(Z_MIN_PIN, INPUT_PULLUP);
 	pinMode(Z_MAX_PIN, INPUT_PULLUP);
 	
 	//figure our stuff.
-	calculate_deltas();
-        goto_machine_zero();
+  calculate_fdeltas();
 }
 
-void goto_machine_zero()
+bool laserOn = false;
+
+void set_laser_power(void)
 {
-  Serial.println("init");
-  move_to_max(X_MIN_PIN, X_STEP_PIN, X_DIR_PIN, 0);
-  move_to_max(Y_MIN_PIN, Y_STEP_PIN, Y_DIR_PIN, 0);
-  Serial.println("ok");
+  int lz = -(int)current_steps.z;
+  if( lz < 0 ) lz = 0;
+  if( lz > 255 ) lz = 255;
+  laser.run(lz);
 }
 
-void move_to_max(int limiter_pin, int stepper_pin, int stepper_dir_pin,int dir)
+
+/*
+// acceleration stepping curve
+int steps_per_unit;
+float units_per_step;
+float max_speed = 1.0;  // units per sec
+float max_squared = max_speed * max_speed;  // units per sec
+float accel = 1.0;  // units/sec^2 accel
+int C0;
+float FreqFactor = 1000000.0 * 0.676 * 256.0; // delays will be one microsec per step
+
+
+void init_accel_move( int _steps_per_unit )
 {
-  /* Moves to the maximum possible position
-  */
-  while(can_step(limiter_pin, limiter_pin, 0, 1, dir)){
-    do_step(stepper_pin, stepper_dir_pin, 0);
-    delay(1);
+  steps_per_unit = _steps_per_unit;
+  units_per_step = 1.0 / (float)steps_per_unit;
+
+  float tmp = (2.0 * units_per_step ) / accel;
+  C0 = round( FreqFactor * sqrt(tmp) );
+
+  int accel_steps_required = round( MaxSquared / (2.0 * Accel * units_per_step) );
+}
+*/
+
+static void digiWrite( volatile byte * Port, byte Mask, bool State )
+{
+  if( State ) {
+    *Port |= Mask;
   }
-  // slowly back unitl pin is released
-  while(!can_step(limiter_pin, limiter_pin, 0, 1, dir)){
-    do_step(stepper_pin, stepper_dir_pin, 1);
-    delay(100);
+  else {
+    *Port &= ~Mask;
   }
 }
 
-void dda_move(long micro_delay)
+static void digiToggle( volatile byte * Port, byte Mask )
 {
-	//enable our steppers
-	digitalWrite(X_ENABLE_PIN, HIGH);
-	digitalWrite(Y_ENABLE_PIN, HIGH);
-	digitalWrite(Z_ENABLE_PIN, HIGH);
-	
+  *Port |= Mask;
+  *Port &= ~Mask;
+}
+
+
+static bool digiRead( volatile byte * Port, byte Mask )
+{
+  return ((*Port) & Mask) != 0;
+}
+
+
+const long accelSteps_max = 1000;     // estimated
+const byte ddaLoopOverhead = 30;       // estimated microseconds per loop to subtract from delay amount
+
+void dda_move(long micro_delay , byte rapid)
+{
+  //Serial.print( current_steps.x ); Serial.print(" " ); Serial.print( current_steps.y ); Serial.print(" " ); Serial.println( current_steps.z );
+  //Serial.print( target_steps.x  ); Serial.print(" " ); Serial.print( target_steps.y  ); Serial.print(" " ); Serial.println( target_steps.z  );
+
 	//figure out our deltas
 	max_delta = max(delta_steps.x, delta_steps.y);
 	max_delta = max(delta_steps.z, max_delta);
+
+  if( delta_steps.x == 0 && delta_steps.y == 0 ) {
+    //rapid = 0; // don't do acceleration for Z - no need
+    return;
+  }
 
 	//init stuff.
 	long x_counter = -max_delta/2;
@@ -88,32 +150,46 @@ void dda_move(long micro_delay)
 	bool x_can_step = 0;
 	bool y_can_step = 0;
 	bool z_can_step = 0;
-	
+
 	if (micro_delay >= 16383)
 		milli_delay = micro_delay / 1000;
 	else
 		milli_delay = 0;
 
-	//do our DDA line!
+  long Cn, accelSteps, decelStart;
+  if( rapid ) {
+    milli_delay = 0;
+    Cn = (long)800 << 8;  // initial delay (estimated - larger = slower acceleration)
+    micro_delay = Cn >> 8;
+    accelSteps = accelSteps_max;
+    if( accelSteps > (max_delta>>1)) accelSteps = max_delta>>1;
+    decelStart = max_delta - accelSteps;  // step to start decelerating
+  }
+
+  int8_t xd = x_direction ? 1 : -1;
+  int8_t yd = y_direction ? 1 : -1;
+  int8_t zd = z_direction ? 1 : -1;
+
+  //do our DDA line!
+  long curStep = 1; // used only during rapid moves, for accel/decel tracking
 	do
 	{
-		x_can_step = can_step(X_MIN_PIN, X_MAX_PIN, current_steps.x, target_steps.x, x_direction);
-		y_can_step = can_step(Y_MIN_PIN, Y_MAX_PIN, current_steps.y, target_steps.y, y_direction);
-		z_can_step = can_step(Z_MIN_PIN, Z_MAX_PIN, current_steps.z, target_steps.z, z_direction);
+    x_can_step = can_step(XMIN_PORT, XMIN_MASK, XMAX_PORT, XMAX_MASK, current_steps.x, target_steps.x, x_direction);
+		y_can_step = can_step(YMIN_PORT, YMIN_MASK, YMAX_PORT, YMAX_MASK, current_steps.y, target_steps.y, y_direction);
+
+		z_can_step = current_steps.z != target_steps.z; // no limits in Z because the laser is clamped
+
 
 		if (x_can_step)
 		{
 			x_counter += delta_steps.x;
-			
 			if (x_counter > 0)
 			{
-				do_step(X_STEP_PIN, X_DIR_PIN, x_direction);
+        digiWrite( XDIR_PORT, XDIR_MASK , x_direction^1 );
+        digiToggle( XSTEP_PORT, XSTEP_MASK );
+
 				x_counter -= max_delta;
-				
-				if (x_direction)
-					current_steps.x++;
-				else
-					current_steps.x--;
+				current_steps.x += xd;
 			}
 		}
 
@@ -123,164 +199,320 @@ void dda_move(long micro_delay)
 			
 			if (y_counter > 0)
 			{
-				do_step(Y_STEP_PIN, Y_DIR_PIN, y_direction);
-				y_counter -= max_delta;
+        digiWrite( YDIR_PORT, YDIR_MASK , y_direction );
+        digiToggle( YSTEP_PORT, YSTEP_MASK );
 
-				if (y_direction)
-					current_steps.y++;
-				else
-					current_steps.y--;
+				y_counter -= max_delta;
+			  current_steps.y += yd;
 			}
 		}
 		
 		if (z_can_step)
 		{
 			z_counter += delta_steps.z;
-			
+
 			if (z_counter > 0)
 			{
-                                if(Z_ENABLE_SERVO==0){
-				  do_step(Z_STEP_PIN, Z_DIR_PIN, z_direction);
-                                }
+        //if(Z_ENABLE_SERVO==0 && Z_ENABLE_LASER==0){
+				//  do_step(Z_STEP_PIN, Z_DIR_PIN, z_direction);
+        //}
 				z_counter -= max_delta;
-				
-				if (z_direction)
-					current_steps.z++;
-				else
-					current_steps.z--;
+
+				current_steps.z += zd;
+        set_laser_power();
 			}
 		}
-		
-		
-				
+
 		//wait for next step.
 		if (milli_delay > 0)
-			delay(milli_delay);			
-		else
+			delay(milli_delay);
+		else if( micro_delay > 0 )
 			delayMicroseconds(micro_delay);
+
+    if( rapid ) {
+      curStep++;
+      if( curStep < accelSteps ) {
+        Cn -= (Cn << 1) / ((curStep<<2) + 1);
+        micro_delay = (Cn >> 8) - ddaLoopOverhead; // tuning value, approximate # usecs taken by the loop
+      }
+      else if( curStep > decelStart ) {
+        long n = curStep - max_delta;
+        Cn -= (Cn << 1) / ((n<<2) + 1);
+        micro_delay = (Cn >> 8) - ddaLoopOverhead;
+      }
+      else {
+        delayMicroseconds(ddaLoopOverhead);
+      }
+    }
 	}
-	while (x_can_step || y_can_step || z_can_step);
+	while (x_can_step | y_can_step | z_can_step);
 	
 	//set our points to be the same
-	current_units.x = target_units.x;
-	current_units.y = target_units.y;
-	current_units.z = target_units.z;
-	calculate_deltas();
+  current_funits = target_funits;
+  current_steps = target_steps;
+
+  //calculate_fdeltas();
 }
 
-bool can_step(byte min_pin, byte max_pin, long current, long target, byte direction)
+void get_circle_dir( int8_t f, int8_t d, int8_t a, int8_t b , int8_t & xd, int8_t & yd )
+{
+  int binrep = 0;
+  xd = yd = 0;
+  if(f) binrep = binrep + 4;
+  if(a) binrep = binrep + 2;
+  if(b) binrep = binrep + 1;
+  if(d) binrep = 7 - binrep;  // opposite direction, reverse the cases
+
+  switch(binrep)
+  {
+    case 0:  yd = -1;  break;
+    case 1:  xd = -1;  break;
+    case 2:  xd =  1;  break;
+    case 3:  yd =  1;  break;
+    case 4:  xd =  1;  break;
+    case 5:  yd = -1;  break;
+    case 6:  yd =  1;  break;
+    case 7:  xd = -1;  break;
+  }
+}
+
+void dda_circle( long micro_delay , long xc, long yc, int8_t dir )
+{
+  //Serial.print( current_steps.x );  Serial.print("  " );
+  //Serial.print( current_steps.y );  Serial.print("  " );
+  //Serial.print( xc );  Serial.print("  " );
+  //Serial.print( yc );  Serial.println("  " );
+  //Serial.print( target_steps.x );  Serial.print("  " );
+  //Serial.print( target_steps.y );  Serial.print("  " );
+  //Serial.print( dir );  Serial.println("  " );
+
+  dir ^= 1;
+
+  //init stuff
+  int64_t xdelt = current_steps.x - xc;
+  int64_t ydelt = current_steps.y - yc;
+  int64_t x_counter = xdelt * xdelt;
+  int64_t y_counter = ydelt * ydelt;
+  int64_t radsq = x_counter + y_counter;
+
+  if (micro_delay >= 16383)
+    milli_delay = micro_delay / 1000;
+  else
+    milli_delay = 0;
+
+  int8_t xd, yd;
+
+  do {
+    // figure out which direction we have to go
+    int64_t fxy = x_counter + y_counter - radsq;
+    int8_t f = fxy >= 0;
+    int8_t a = xdelt >= 0;
+    int8_t b = ydelt >= 0;
+    
+    get_circle_dir( f, dir, a, b , xd, yd );
+
+    x_direction = xd >= 0;
+    y_direction = yd >= 0;
+
+    //Serial.print( current_steps.x );  Serial.print( "  " );  Serial.print( xd );  Serial.print( "  " );
+    //Serial.print( current_steps.y );  Serial.print( "  " );  Serial.println( yd );
+
+    if( xd != 0 ) {
+      digiWrite( XDIR_PORT, XDIR_MASK , x_direction^1 );
+      digiWrite( XSTEP_PORT, XSTEP_MASK, true );
+      digiWrite( XSTEP_PORT, XSTEP_MASK, false );
+
+      current_steps.x += xd;
+      xdelt += xd;
+      x_counter = xdelt * xdelt;
+    }
+
+    if( yd != 0 ) {
+      digiWrite( YDIR_PORT, YDIR_MASK , y_direction );
+      digiWrite( YSTEP_PORT, YSTEP_MASK, true );
+      digiWrite( YSTEP_PORT, YSTEP_MASK, false );
+
+      current_steps.y += yd;
+      ydelt += yd;
+      y_counter = ydelt * ydelt;
+    }
+
+    //wait for next step.
+    if (milli_delay > 0)
+      delay(milli_delay);
+    else if( micro_delay > 0 )
+      delayMicroseconds(micro_delay);
+
+  } while( (current_steps.x != target_steps.x && current_steps.y != target_steps.y) ||
+          abs(current_steps.x - target_steps.x) > 10 || abs(current_steps.y - target_steps.y) > 10 );
+
+
+  // only one of these loops will actually run...
+  if( current_steps.x != target_steps.x ) {
+    if( current_steps.x > target_steps.x )
+      xd = -1;
+    else
+      xd = 1;
+    x_direction = xd > 0;
+
+    while( current_steps.x != target_steps.x )
+    {
+      digiWrite( XDIR_PORT, XDIR_MASK , x_direction^1 );
+      digiWrite( XSTEP_PORT, XSTEP_MASK, true );
+      digiWrite( XSTEP_PORT, XSTEP_MASK, false );
+      current_steps.x += xd;
+
+      //wait for next step.
+      if (milli_delay > 0)
+        delay(milli_delay);
+      else if( micro_delay > 0 )
+        delayMicroseconds(micro_delay);
+    }
+  }
+
+  if( current_steps.y != target_steps.y ) {
+    if( current_steps.y > target_steps.y )
+      yd = -1;
+    else
+      yd = 1;
+    y_direction = yd > 0;
+
+    while( current_steps.y != target_steps.y )
+    {
+      digiWrite( YDIR_PORT, YDIR_MASK , y_direction );
+      digiWrite( YSTEP_PORT, YSTEP_MASK, true );
+      digiWrite( YSTEP_PORT, YSTEP_MASK, false );
+      current_steps.y += yd;
+
+      //wait for next step.
+      if (milli_delay > 0)
+        delay(milli_delay);
+      else if( micro_delay > 0 )
+        delayMicroseconds(micro_delay);
+    }
+  }
+
+  current_funits.x = target_funits.x;
+  current_funits.y = target_funits.y;
+}
+
+
+bool can_step(volatile byte *min_port, byte min_pin, volatile byte * max_port, byte max_pin, long current, long target, byte direction)
 {
 	//stop us if we're on target
 	if (target == current)
 		return false;
+
 	//stop us if we're at home and still going 
-	else if (read_switch(min_pin) && !direction)
+	else if (!direction && read_switch(min_port, min_pin))
 		return false;
 	//stop us if we're at max and still going
-	else if (read_switch(max_pin) && direction)
+	else if (direction && read_switch(max_port, max_pin))
 		return false;
 
 	//default to being able to step
 	return true;
 }
 
-void do_step(byte pinA, byte pinB, byte dir)
-{
-        switch (dir << 2 | digitalRead(pinA) << 1 | digitalRead(pinB)) {
-            case 0: /* 0 00 -> 10 */
-            case 5: /* 1 01 -> 11 */
-                digitalWrite(pinA, HIGH);
-                break;
-            case 1: /* 0 01 -> 00 */
-            case 7: /* 1 11 -> 10 */
-                digitalWrite(pinB, LOW);
-                break;
-            case 2: /* 0 10 -> 11 */
-            case 4: /* 1 00 -> 01 */   
-                digitalWrite(pinB, HIGH);
-                break;
-            case 3: /* 0 11 -> 01 */
-            case 6: /* 1 10 -> 00 */
-                digitalWrite(pinA, LOW);
-                break;
-        }
-	delayMicroseconds(5);
-}
 
-
-bool read_switch(byte pin)
+bool read_switch(volatile byte * port , byte pin)
 {
 	//dual read as crude debounce
-	
-	if ( SENSORS_INVERTING )
-		return !digitalRead(pin) && !digitalRead(pin);
-	else
-		return digitalRead(pin) && digitalRead(pin);
+  if(SENSORS_INVERTING)
+	  return !digiRead(port, pin) && !digiRead(port, pin);  // using && here to give preference to LOW signal
+  else
+    return digiRead(port, pin) && digiRead(port, pin);    // using && here to give preference to LOW signal
 }
 
-long to_steps(float steps_per_unit, float units)
+
+long to_fsteps(long steps_per_unit, long units)
 {
-	return steps_per_unit * units;
+  long intRes = steps_per_unit * (units >> 8);
+  long fracRes = steps_per_unit * (units & ((1<<8)-1));
+
+  intRes += fracRes >> 8;
+  return intRes >> 10;
 }
 
-void set_target(float x, float y, float z)
+
+void set_ftarget(long x, long y, long z)  // Set target location in fixed-point units
 {
-	target_units.x = x;
-	target_units.y = y;
-	target_units.z = z;
-	
-	calculate_deltas();
+  target_funits.x = x;
+  target_funits.y = y;
+  target_funits.z = z;
+ 
+  calculate_fdeltas();
 }
 
-void set_position(float x, float y, float z)
+void set_fposition(long x, long y, long z)
 {
-	current_units.x = x;
-	current_units.y = y;
-	current_units.z = z;
-	
-	calculate_deltas();
+  current_funits.x = x;
+  current_funits.y = y;
+  current_funits.z = z;
+
+  calculate_fdeltas();
 }
 
-void calculate_deltas()
+
+void calculate_fdeltas()
 {
-	//figure our deltas.
-	delta_units.x = abs(target_units.x - current_units.x);
-	delta_units.y = abs(target_units.y - current_units.y);
-	delta_units.z = abs(target_units.z - current_units.z);
-				
-	//set our steps current, target, and delta
-	current_steps.x = to_steps(x_units, current_units.x);
-	current_steps.y = to_steps(y_units, current_units.y);
-	current_steps.z = to_steps(z_units, current_units.z);
+  //figure our deltas.
+  delta_funits.x = abs(target_funits.x - current_funits.x);
+  delta_funits.y = abs(target_funits.y - current_funits.y);
+  delta_funits.z = abs(target_funits.z - current_funits.z);
 
-	target_steps.x = to_steps(x_units, target_units.x);
-	target_steps.y = to_steps(y_units, target_units.y);
-	target_steps.z = to_steps(z_units, target_units.z);
+  //set our steps current, target, and delta
+  //current_steps.x = to_steps(x_funits, current_funits.x);
+  //current_steps.y = to_steps(y_funits, current_funits.y);
+  //current_steps.z = to_steps(z_funits, current_funits.z);
 
-	delta_steps.x = abs(target_steps.x - current_steps.x);
-	delta_steps.y = abs(target_steps.y - current_steps.y);
-	delta_steps.z = abs(target_steps.z - current_steps.z);
-	
-	//what is our direction
-	x_direction = (target_units.x >= current_units.x);
-	y_direction = (target_units.y >= current_units.y);
-	z_direction = (target_units.z >= current_units.z);
+  target_steps.x = to_fsteps(x_funits, target_funits.x);
+  target_steps.y = to_fsteps(y_funits, target_funits.y);
+  target_steps.z = to_fsteps(z_funits, target_funits.z);
 
-	//set our direction pins as well
-	digitalWrite(X_DIR_PIN, x_direction);
-	digitalWrite(Y_DIR_PIN, y_direction);
-	digitalWrite(Z_DIR_PIN, z_direction);
+  delta_steps.x = abs(target_steps.x - current_steps.x);
+  delta_steps.y = abs(target_steps.y - current_steps.y);
+  delta_steps.z = abs(target_steps.z - current_steps.z);
+  
+  //what is our direction
+  x_direction = (target_funits.x >= current_funits.x);
+  y_direction = (target_funits.y >= current_funits.y);
+  z_direction = (target_funits.z >= current_funits.z);
+
+  //set our direction pins as well
+  digitalWrite(X_DIR_PIN, x_direction^1);
+  digitalWrite(Y_DIR_PIN, y_direction);
+  digitalWrite(Z_DIR_PIN, z_direction);
 }
+
+float prevRate = 0;
+float steps_per_second = 0;
+float micros_per_step = 0;
 
 
 long calculate_feedrate_delay(float feedrate)
 {
-	//how long is our line length?
-	float distance = sqrt(delta_units.x*delta_units.x + delta_units.y*delta_units.y + delta_units.z*delta_units.z);
-	long master_steps = 0;
-	
+  if( delta_steps.x == 0 && delta_steps.y == 0 ) {
+    return 0; // No delay required for Z axis solo movements
+  }
+
+  // feedrate probably doesn't change too often, so cache some calculation results
+  if( prevRate != feedrate ) {
+    prevRate = feedrate;
+    steps_per_second = feedrate * (1.0/60.0) * x_units;
+    micros_per_step = 1000000.0 / steps_per_second;  // convert to microseconds per steps
+  }
+
+  // hypotenuse approximation - ~5.7% max error in x/y, z doesn't contribute anything significant in our usage
+  long hi = max( delta_steps.x , delta_steps.y );
+  long lo = min( delta_steps.x , delta_steps.y );
+  hi = max( hi, delta_steps.z );
+  long stepDist = (float)(hi + lo/3);
+
+	long master_steps;
+
 	//find the dominant axis.
-	if (delta_steps.x > delta_steps.y)
+	if (delta_steps.x >= delta_steps.y)
 	{
 		if (delta_steps.z > delta_steps.x)
 			master_steps = delta_steps.z;
@@ -295,12 +527,25 @@ long calculate_feedrate_delay(float feedrate)
 			master_steps = delta_steps.y;
 	}
 
-	//calculate delay between steps in microseconds.  this is sort of tricky, but not too bad.
-	//the formula has been condensed to save space.  here it is in english:
-	// distance / feedrate * 60000000.0 = move duration in microseconds
-	// move duration / master_steps = time between steps for master axis.
+  long res = (long)((stepDist * micros_per_step) / master_steps);
+  if( res < 0 ) res = 0;
 
-	return ((distance * 60000000.0) / feedrate) / master_steps;	
+  return res;
+}
+
+long calculate_feedrate_delay_circle(float feedrate , float distance)
+{
+  float master_steps = x_units * distance;
+
+  //calculate delay between steps in microseconds.  this is sort of tricky, but not too bad.
+  //the formula has been condensed to save space.  here it is in english:
+  // distance / feedrate * 60000000.0 = move duration in microseconds
+  // move duration / master_steps = time between steps for master axis.
+
+  long res = (distance * 60000000.0) / (feedrate * master_steps);
+  if( res < 0 ) res = 0;
+
+  return res;
 }
 
 long getMaxSpeed()
@@ -311,10 +556,3 @@ long getMaxSpeed()
 		return calculate_feedrate_delay(FAST_XY_FEEDRATE);
 }
 
-void disable_steppers()
-{
-	//enable our steppers
-	digitalWrite(X_ENABLE_PIN, LOW);
-	digitalWrite(Y_ENABLE_PIN, LOW);
-	digitalWrite(Z_ENABLE_PIN, LOW);
-}

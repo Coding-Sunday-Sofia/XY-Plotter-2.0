@@ -1,23 +1,55 @@
+
+// This code has been rewritten for speed by Jason Dorie
+
+
 // our point structure to make things nice.
-struct LongPoint {
-	long x;
-	long y;
- 	long z;
-};
-
 struct FloatPoint {
-	float x;
-	float y;
- 	float z;
+  float x;
+  float y;
+  float z;
 };
 
-FloatPoint current_units;
-FloatPoint target_units;
-FloatPoint delta_units;
+struct LongPoint {
+  long  x;
+  long  y;
+  long  z;
+};
 
-FloatPoint current_steps;
-FloatPoint target_steps;
-FloatPoint delta_steps;
+struct GCodeParams {
+  float x, y, z;
+  float i, j, k;
+  float f;
+
+  byte paramValid;    // X = bit0, Y = bit1, etc...
+};
+
+
+// Stored as thousandths
+struct IGCodeParams {
+  long  x, y, z;
+  long  i, j, k;
+  long  f;
+
+  byte paramValid;    // X = bit0, Y = bit1, etc...
+};
+
+
+const byte P_X = 1<<0;
+const byte P_Y = 1<<1;
+const byte P_Z = 1<<2;
+const byte P_I = 1<<3;
+const byte P_J = 1<<4;
+const byte P_K = 1<<5;
+const byte P_F = 1<<6;
+
+LongPoint current_funits; // current units in fixed point
+LongPoint target_funits;
+LongPoint delta_funits;
+
+
+LongPoint current_steps;
+LongPoint target_steps;
+LongPoint delta_steps;
 
 boolean abs_mode = false;   //0 = incremental; 1 = absolute
 
@@ -25,7 +57,11 @@ boolean abs_mode = false;   //0 = incremental; 1 = absolute
 float x_units = X_STEPS_PER_MM;
 float y_units = Y_STEPS_PER_MM;
 float z_units = Z_STEPS_PER_MM;
-float curve_section = CURVE_SECTION_MM;
+
+long  x_funits;
+long  y_funits;
+long  z_funits;
+
 
 //our direction vars
 byte x_direction = 1;
@@ -35,454 +71,879 @@ byte z_direction = 1;
 //init our string processing
 void init_process_string()
 {
-	//init our command
-	for (byte i=0; i<COMMAND_SIZE; i++)
-		commands[i] = 0;
-	serial_count = 0;
+  //init our command
+  //for (byte i = 0; i < COMMAND_SIZE; i++)
+  //  commands[i] = 0;
+  serial_count = 0;
 }
 
 //our feedrate variables.
 float feedrate = 0.0;
+float lastRate = 500.0;
 long feedrate_micros = 0;
 
-//Read the string and execute instructions
-void process_string(char instruction[], int size)
+
+void ParseSetupCommand( char * instruction, byte & index , byte size );
+void ParseGCodeInstruction( char * instruction, byte & index , byte size );
+void ParseGCodeParams( char * instruction, byte & index, byte size, GCodeParams & gc );
+void ParseGCodeParams( char * instruction, byte & index, byte size, IGCodeParams & gc );
+void ParseMCodeInstruction( char * instruction, byte & index , byte size );
+
+void ParseIntegerTriple( char * instruction , byte & index , byte size , LongPoint & pt );    // int values labelled XYZ
+void ParseFloatTriple( char * instruction , byte & index , byte size , FloatPoint & ptf );     // float values labelled XYZ
+long GetInteger( char * instruction, byte & index , byte size );
+float GetFloat( char * instruction, byte & index , byte size );
+long GetFixedInteger( char * instruction, byte & index , byte size );
+long GetFloatAsInteger( char * instruction, byte & index , byte size , long & scale );
+void SkipNumber( char * instruction, byte & index , byte size );
+
+
+void UpdateFUnits(void)
 {
-	//the character / means delete block... used for comments and stuff.
-	if (instruction[0] == '/')
-	{
-		Serial.println("OK");
-		return;
-	}
-
-	//init baby!
-	FloatPoint fp;
-	fp.x = 0.0;
-	fp.y = 0.0;
-	fp.z = 0.0;
-
-	byte code = 0;
-	
-        
-	//did we get a gcode?
-	if (!has_command('$', instruction, size)&&(
-		has_command('G', instruction, size) ||
-		has_command('X', instruction, size) ||
-		has_command('Y', instruction, size) ||
-		has_command('Z', instruction, size))
-	)
-	{
-		//which one?
-		code = (int)search_string('G', instruction, size);
-		
-		// Get co-ordinates if required by the code type given
-		switch (code)
-		{
-			case 0:
-			case 1:
-			case 2:
-			case 3:
-				if(abs_mode)
-				{
-					//we do it like this to save time. makes curves better.
-					//eg. if only x and y are specified, we dont have to waste time looking up z.
-					if (has_command('X', instruction, size))
-						fp.x = search_string('X', instruction, size);
-					else
-						fp.x = current_units.x;
-				
-					if (has_command('Y', instruction, size))
-						fp.y = search_string('Y', instruction, size);
-					else
-						fp.y = current_units.y;
-				
-					if (has_command('Z', instruction, size))
-						fp.z = search_string('Z', instruction, size);
-					else
-						fp.z = current_units.z;
-				}
-				else
-				{
-					fp.x = search_string('X', instruction, size) + current_units.x;
-					fp.y = search_string('Y', instruction, size) + current_units.y;
-					fp.z = search_string('Z', instruction, size) + current_units.z;
-				}
-
-                                targetPosServo = fp.z;
-			break;
-		}
-		//do something!
-		switch (code)
-		{
-			//Rapid Positioning
-			//Linear Interpolation
-			//these are basically the same thing.
-			case 0:
-			case 1:
-				//set our target.
-				set_target(fp.x, fp.y, fp.z);
-                                servo.write(targetPosServo); 
-				//do we have a set speed?
-				if (has_command('G', instruction, size))
-				{
-					//adjust if we have a specific feedrate.
-					if (code == 1)
-					{
-						//how fast do we move?
-						feedrate = search_string('F', instruction, size);
-						if (feedrate > 0)
-							feedrate_micros = calculate_feedrate_delay(feedrate);
-						//nope, no feedrate
-						else
-							feedrate_micros = getMaxSpeed();
-					}
-					//use our max for normal moves.
-					else
-						feedrate_micros = getMaxSpeed();
-				}
-				//nope, just coordinates!
-				else
-				{
-					//do we have a feedrate yet?
-					if (feedrate > 0)
-						feedrate_micros = calculate_feedrate_delay(feedrate);
-					//nope, no feedrate
-					else
-						feedrate_micros = getMaxSpeed();
-				}
-
-				//finally move.
-				dda_move(feedrate_micros);
-			break;
-			
-			//Clockwise arc
-			case 2:
-			//Counterclockwise arc
-			case 3:
-				FloatPoint cent;
-
-				// Centre coordinates are always relative
-				cent.x = search_string('I', instruction, size) + current_units.x;
-				cent.y = search_string('J', instruction, size) + current_units.y;
-				float angleA, angleB, angle, radius, length, aX, aY, bX, bY;
-
-				aX = (current_units.x - cent.x);
-				aY = (current_units.y - cent.y);
-				bX = (fp.x - cent.x);
-				bY = (fp.y - cent.y);
-				
-				if (code == 2) { // Clockwise
-					angleA = atan2(bY, bX);
-					angleB = atan2(aY, aX);
-				} else { // Counterclockwise
-					angleA = atan2(aY, aX);
-					angleB = atan2(bY, bX);
-				}
-
-				// Make sure angleB is always greater than angleA
-				// and if not add 2PI so that it is (this also takes
-				// care of the special case of angleA == angleB,
-				// ie we want a complete circle)
-				if (angleB <= angleA) angleB += 2 * M_PI;
-				angle = angleB - angleA;
-
-				radius = sqrt(aX * aX + aY * aY);
-				length = radius * angle;
-				int steps, s, step;
-				steps = (int) ceil(length / curve_section);
-
-				FloatPoint newPoint;
-				for (s = 1; s <= steps; s++) {
-					step = (code == 3) ? s : steps - s; // Work backwards for CW
-					newPoint.x = cent.x + radius * cos(angleA + angle * ((float) step / steps));
-					newPoint.y = cent.y + radius * sin(angleA + angle * ((float) step / steps));
-					set_target(newPoint.x, newPoint.y, fp.z);
-
-					// Need to calculate rate for each section of curve
-					if (feedrate > 0)
-						feedrate_micros = calculate_feedrate_delay(feedrate);
-					else
-						feedrate_micros = getMaxSpeed();
-
-					// Make step
-					dda_move(feedrate_micros);
-				}
-	
-			break;
-
-			//Dwell
-			case 4:
-				delay((int)search_string('P', instruction, size));
-			break;
-
-			//Inches for Units
-			case 20:
-				x_units = X_STEPS_PER_INCH;
-				y_units = Y_STEPS_PER_INCH;
-				z_units = Z_STEPS_PER_INCH;
-				curve_section = CURVE_SECTION_INCHES;
-				
-				calculate_deltas();
-			break;
-
-			//mm for Units
-			case 21:
-				x_units = X_STEPS_PER_MM;
-				y_units = Y_STEPS_PER_MM;
-				z_units = Z_STEPS_PER_MM;
-				curve_section = CURVE_SECTION_MM;
-				
-				calculate_deltas();
-			break;
-
-			//go home.
-			case 28:
-				set_target(0.0, 0.0, 0.0);
-				goto_machine_zero();
-			break;
-
-			//go home via an intermediate point.
-			case 30:
-				fp.x = search_string('X', instruction, size);
-				fp.y = search_string('Y', instruction, size);
-				fp.z = search_string('Z', instruction, size);
-
-				//set our target.
-				if(abs_mode)
-				{
-					if (!has_command('X', instruction, size))
-						fp.x = current_units.x;
-					if (!has_command('Y', instruction, size))
-						fp.y = current_units.y;
-					if (!has_command('Z', instruction, size))
-						fp.z = current_units.z;
-						
-					set_target(fp.x, fp.y, fp.z);
-				}
-				else
-					set_target(current_units.x + fp.x, current_units.y + fp.y, current_units.z + fp.z);
-				
-				//go there.
-				dda_move(getMaxSpeed());
-
-				//go home.
-				set_target(0.0, 0.0, 0.0);
-				goto_machine_zero();
-			break;
-
-			//Absolute Positioning
-			case 90:
-				abs_mode = true;
-			break;
-
-			//Incremental Positioning
-			case 91:
-				abs_mode = false;
-                        
-			break;
-
-			//Set as home
-			case 92:
-				set_position(0.0, 0.0, 0.0);
-			break;
-
-/*
-			//Inverse Time Feed Mode
-			case 93:
-
-			break;  //TODO: add this
-
-			//Feed per Minute Mode
-			case 94:
-
-			break;  //TODO: add this
-*/
-
-			default:
-				Serial.print("huh? G");
-				Serial.println(code,DEC);
-		}
-	}
-        if (has_command('M', instruction, size))
-	{
-		code = search_string('M', instruction, size);
-		switch (code)
-		{
-			//TODO: this is a bug because search_string returns 0.  gotta fix that.
-			case 0:
-				true;
-			break;
-			
-			default:
-				Serial.print("Huh? M");
-				Serial.println(code);
-		}		
-	}
-        if(has_command('$', instruction, size)){
-          
-            code = search_string('$', instruction, size);
-            switch(code){
-              case 1:
-             //set XYZ STEP PIN
-             if (has_command('X', instruction, size)){
-		X_STEP_PIN = search_string('X', instruction, size);
-                pinMode(X_STEP_PIN,OUTPUT);
-                digitalWrite(X_STEP_PIN,LOW);
-            }
-            if (has_command('Y', instruction, size)){
-		Y_STEP_PIN = search_string('Y', instruction, size);
-                pinMode(Y_STEP_PIN,OUTPUT);
-                digitalWrite(Y_STEP_PIN,LOW);
-            }
-            if (has_command('Z', instruction, size)){
-		int TEMP_PIN = search_string('Z', instruction, size);
-                
-                  if(Z_STEP_PIN!=TEMP_PIN){
-                    Z_STEP_PIN = TEMP_PIN;
-                    if(Z_ENABLE_SERVO==1){
-                      servo.attach(Z_STEP_PIN);
-                    }else{
-                       pinMode(Z_STEP_PIN,OUTPUT);  
-                       digitalWrite(Z_STEP_PIN,LOW);   
-                    }
-                  }
-            }
-             break;
-            case 2:
-             //set XYZ DIR PIN
-             if (has_command('X', instruction, size)){
-		X_DIR_PIN = search_string('X', instruction, size);
-                pinMode(X_DIR_PIN,OUTPUT);
-                digitalWrite(X_DIR_PIN,LOW);
-            }
-            if (has_command('Y', instruction, size)){
-		Y_DIR_PIN = search_string('Y', instruction, size);
-                pinMode(Y_DIR_PIN,OUTPUT);
-                digitalWrite(Y_DIR_PIN,LOW);
-            }
-            if (has_command('Z', instruction, size)){
-		Z_DIR_PIN = search_string('Z', instruction, size);
-                pinMode(Z_DIR_PIN,OUTPUT);
-                digitalWrite(Z_DIR_PIN,LOW);
-            }
-            break;
-            case 3:
-             //set XYZ Min PIN
-             if (has_command('X', instruction, size)){
-		X_MIN_PIN = search_string('X', instruction, size);
-                pinMode(X_MIN_PIN,INPUT_PULLUP);
-            }
-            if (has_command('Y', instruction, size)){
-		Y_MIN_PIN = search_string('Y', instruction, size);
-                pinMode(Y_MIN_PIN,INPUT_PULLUP);
-            }
-            if (has_command('Z', instruction, size)){
-		Z_MIN_PIN = search_string('Z', instruction, size);
-                pinMode(Z_MIN_PIN,INPUT_PULLUP);
-            }
-            break;
-            case 4:
-             //set XYZ Max PIN
-             if (has_command('X', instruction, size)){
-		X_MAX_PIN = search_string('X', instruction, size);
-                pinMode(X_MAX_PIN,INPUT_PULLUP);
-            }
-            if (has_command('Y', instruction, size)){
-		Y_MAX_PIN = search_string('Y', instruction, size);
-                pinMode(Y_MAX_PIN,INPUT_PULLUP);
-            }
-            if (has_command('Z', instruction, size)){
-		Z_MAX_PIN = search_string('Z', instruction, size);
-                pinMode(Z_MAX_PIN,INPUT_PULLUP);
-            }
-            break;
-            case 5:
-             //ENABLE SERVO MOTOR FOR Z
-             if(has_command('Z',instruction,size)){
-               Z_ENABLE_SERVO = search_string('Z', instruction, size);
-               
-             }
-             break;
-             case 6:
-             //set XYZ STEPS PER MM
-             if (has_command('X', instruction, size)){
-		X_STEPS_PER_MM = search_string('X', instruction, size);
-                x_units = X_STEPS_PER_MM;
-                Serial.println(x_units);
-            }
-            if (has_command('Y', instruction, size)){
-		Y_STEPS_PER_MM = search_string('Y', instruction, size);
-                y_units = Y_STEPS_PER_MM;
-            }
-            if (has_command('Z', instruction, size)){
-		Z_STEPS_PER_MM = search_string('Z', instruction, size);
-                z_units = Z_STEPS_PER_MM;
-            }
-            break;
-            case 7:
-             //set XYZ FEEDRATE
-             if (has_command('X', instruction, size)){
-		FAST_XY_FEEDRATE = search_string('X', instruction, size);
-            }else if (has_command('Y', instruction, size)){
-		FAST_XY_FEEDRATE = search_string('Y', instruction, size);
-            }
-            if (has_command('Z', instruction, size)){
-		FAST_Z_FEEDRATE = search_string('Z', instruction, size);
-            }
-            break;
-            case 8:
-             //set XYZ INVERT LIMIT SWITCH
-             if (has_command('S', instruction, size)){
-		SENSORS_INVERTING = search_string('S', instruction, size);
-            }
-            break;
-            }
-            
-        }
-	//tell our host we're done.
-      if(code==0&&size==1){
-        Serial.println("start");
-      }else{
-        Serial.println("OK");
-      }
-//	Serial.println(line, DEC);
+  // GCode is parsed into *1000 units, 
+  x_funits = (long)(x_units * 256.0 / 1000.0 * 1024.0 + 0.5);
+  y_funits = (long)(y_units * 256.0 / 1000.0 * 1024.0 + 0.5);
+  z_funits = (long)(z_units * 256.0 / 1000.0 * 1024.0 + 0.5);
 }
+
+
+void process_string(char instruction[], byte size)
+{
+  //the character / means delete block... used for comments and stuff.
+  if (instruction[0] == '/')
+  {
+    Serial.println("ok");
+    return;
+  }
+
+  if( size == 1 ) {
+    Serial.print("start");
+    return;
+  }
+
+  // parse the line into whatever we get
+
+  // N# = line number (skip)
+  // G# = gcode command
+  // M# = motor command
+
+  byte index = 0;
+  while( index < size )
+  {
+    switch( instruction[index] )
+    {
+      case '$':
+        index++;
+        ParseSetupCommand( instruction, index, size );
+        break;
+
+      case 'N':
+      case 'n':
+        index++;
+        SkipNumber( instruction, index, size ); // skip the line number
+        break;
+
+      case 'G':
+      case 'g':
+        index++;
+        ParseGCodeInstruction( instruction, index, size );
+        break;
+
+      case 'M':
+      case 'm':
+        index++;
+        ParseMCodeInstruction( instruction, index, size );
+        break;
+
+      case 'x':
+      case 'X':
+      case 'y':
+      case 'Y':
+      case 'z':
+      case 'Z':
+        ParseGCodeInstruction( instruction, index, size );
+        break;
+
+      case 'h':
+      case 'H':
+        index++;
+        SkipNumber( instruction, index, size ); // skip params we don't understand
+        break;
+
+      default:
+        index++;
+        break;
+    }
+  }
+
+  Serial.println("ok");
+}
+
+void ParseGCodeInstruction( char * instruction, byte & index , byte size )
+{
+  // G0 = rapid goto
+  // G1 = feedrate goto
+  // G2 = clockwise arc
+  // G3 = counter-clockwise arc
+  // G4 = dwell
+
+  // G20 = inch units
+  // G20 = mm units
+  // G28 = go home
+  // G30 = home via intermediate point
+  // G90 = use absolute positioning
+  // G91 = use relative positioning
+  // G92 = set as home
+
+  //FloatPoint fp;
+  LongPoint lp;
+
+  long CommandScale;
+  long Command = GetFloatAsInteger( instruction, index, size, CommandScale );
+
+  IGCodeParams gc;
+  gc.x = gc.y = gc.z = 0.0;
+
+  ParseGCodeParams( instruction, index, size, gc );
+
+  if( Command >= 0 && Command < 4 )
+  {
+    if( abs_mode )
+    {
+      if( gc.paramValid & P_X ) {
+        lp.x = gc.x;
+      }
+      else {
+        lp.x = current_funits.x;
+      }
+  
+      if( gc.paramValid & P_Y ) {
+        lp.y = gc.y;
+      }
+      else {
+        lp.y = current_funits.y;
+      }
+
+      if( gc.paramValid & P_Z ) {
+        lp.z = gc.z;
+      }
+      else {
+        lp.z = current_funits.z;
+      }
+    }
+    else
+    {
+        lp.x = current_funits.x + gc.x;
+        lp.y = current_funits.y + gc.y;
+        lp.z = current_funits.z + gc.z;
+    }
+  }
+
+  switch( Command )
+  {
+    case 0:
+    case 1:
+      set_ftarget(lp.x, lp.y, lp.z);
+
+      //adjust if we have a specific feedrate.
+      if(Command == 1)
+      {
+        //how fast do we move?
+        if( gc.paramValid & P_F ) {
+          feedrate = gc.f * 0.001;
+          lastRate = feedrate;
+          feedrate_micros = calculate_feedrate_delay(feedrate);
+        }
+        else  //nope, no feedrate - use previous
+        {
+          feedrate = lastRate;
+          feedrate_micros = calculate_feedrate_delay(feedrate);
+        }
+      }
+      //use our max for normal moves.
+      else
+        feedrate_micros = getMaxSpeed();
+
+      dda_move(feedrate_micros, Command == 0);
+      break;
+
+    case 2: //Clockwise arc
+    case 3: //Counterclockwise arc
+      LongPoint cent;
+
+      //how fast do we move?
+      if( gc.paramValid & P_F ) {
+        feedrate = gc.f * 0.001;
+        lastRate = feedrate;
+      }
+      else {
+        feedrate = lastRate;
+      }
+
+      // Centre coordinates are always relative
+      cent.x = current_funits.x;
+      cent.y = current_funits.y;
+
+      if( gc.paramValid & P_I ) cent.x += gc.i;
+      if( gc.paramValid & P_J ) cent.y += gc.j;
+
+      float angleA, angleB, angle, radius, length, aX, aY, bX, bY;
+
+      aX = (current_funits.x - cent.x) * 0.001;
+      aY = (current_funits.y - cent.y) * 0.001;
+      bX = (lp.x - cent.x);
+      bY = (lp.y - cent.y);
+
+      if (Command == 2) { // Clockwise
+        angleA = atan2(bY, bX);
+        angleB = atan2(aY, aX);
+      } else { // Counterclockwise
+        angleA = atan2(aY, aX);
+        angleB = atan2(bY, bX);
+      }
+
+      // Make sure angleB is always greater than angleA
+      // and if not add 2PI so that it is (this also takes
+      // care of the special case of angleA == angleB,
+      // ie we want a complete circle)
+      if (angleB <= angleA) angleB += 2 * M_PI;
+      angle = angleB - angleA;
+
+      radius = sqrt(aX * aX + aY * aY);
+      length = radius * angle;
+
+      {
+        long cx = to_fsteps( x_funits , cent.x );
+        long cy = to_fsteps( y_funits , cent.y );
+
+        set_ftarget(lp.x, lp.y, lp.z);
+
+        feedrate_micros = calculate_feedrate_delay_circle(feedrate , length);
+        dda_circle( feedrate_micros, cx, cy, Command == 3 );
+      }
+      break;
+
+    case 20:
+      x_units = X_STEPS_PER_INCH;
+      y_units = Y_STEPS_PER_INCH;
+      z_units = Z_STEPS_PER_INCH;
+
+      UpdateFUnits();
+      calculate_fdeltas();
+      break;
+
+    case 21:
+      x_units = X_STEPS_PER_MM;
+      y_units = Y_STEPS_PER_MM;
+      z_units = Z_STEPS_PER_MM;
+
+      UpdateFUnits();
+      calculate_fdeltas();
+      break;
+
+    case 28:
+      set_ftarget(0, 0, 0);
+      dda_move(getMaxSpeed(), 1);
+      break;
+
+    case 90:
+      abs_mode = true;
+      Serial.println("abs mode");
+      break;
+
+    case 901:
+      // CommandScale == 10, actual value is 90.1, absolute arc positions
+      Serial.println("abs arcs");
+      break;
+
+    case 91:
+      abs_mode = false;
+      Serial.println("rel mode");
+      break;
+
+    case 911:
+      // CommandScale == 10, actual value is 91.1, relative arc positions
+      Serial.println("rel arcs");
+      break;
+
+    case 92:
+      set_fposition(0, 0, 0);
+      break;
+
+    default:
+      Serial.print("huh? G");
+      Serial.println(Command, DEC);
+      break;
+  }
+}
+
+
+void ParseMCodeInstruction( char * instruction, byte & index , byte size )
+{
+  int Command = GetInteger( instruction, index, size );
+  Serial.print( "M" );
+  Serial.println(Command, DEC);
+}
+
+
+
+void ParseSetupCommand( char * instruction, byte & index , byte size )
+{
+  // $ commands:
+  // $1 X# Y# Z#  = step pin
+  // $2 X# Y# Z#  = dir pin
+  // $3 X# Y# Z#  = min pin (limit) - may not have a digit
+  // $4 X# Y# Z#  = max pin (limit)
+  // $5 Z#        = enable servo
+  // $6 X# Y# Z#  = steps per mm
+  // $7 X# Y# Z#  = fast feedrate for axis
+  // $8 S#        = invert limit switches
+
+  if( index == size ) return;
+
+  char command = instruction[index++];
+  GCodeParams gc;
+  ParseGCodeParams( instruction, index, size, gc );
+
+  switch( command )
+  {
+    case '1': // step pin per axis
+      if( gc.paramValid & P_X ) {
+        X_STEP_PIN = (int)gc.x;
+        pinMode(X_STEP_PIN, OUTPUT);
+        digitalWrite(X_STEP_PIN, LOW);
+
+        XSTEP_PORT = portOutputRegister( digitalPinToPort(X_STEP_PIN) );
+        XSTEP_MASK = digitalPinToBitMask(X_STEP_PIN);
+      }
+
+      if( gc.paramValid & P_Y ) {
+        Y_STEP_PIN = (int)gc.y;
+        pinMode(Y_STEP_PIN, OUTPUT);
+        digitalWrite(Y_STEP_PIN, LOW);
+
+        YSTEP_PORT = portOutputRegister( digitalPinToPort(Y_STEP_PIN) );
+        YSTEP_MASK = digitalPinToBitMask(Y_STEP_PIN);
+      }
+
+      if( (gc.paramValid & P_Z) && gc.z != 0.0) {
+        int TEMP_PIN = (int)gc.z;
+
+        if (Z_STEP_PIN != TEMP_PIN) {
+          Z_STEP_PIN = TEMP_PIN;
+          if (Z_ENABLE_SERVO == 1) {
+            servo.attach(Z_STEP_PIN);
+          } else {
+            pinMode(Z_STEP_PIN, OUTPUT);
+            digitalWrite(Z_STEP_PIN, LOW);
+          }
+        }
+      }
+      break;
+
+    case '2': // dir pin per axis
+      if( gc.paramValid & P_X ) {
+        X_DIR_PIN = (byte)gc.x;
+        pinMode(X_DIR_PIN, OUTPUT);
+        digitalWrite(X_DIR_PIN, LOW);
+
+        XDIR_PORT = portOutputRegister( digitalPinToPort(X_DIR_PIN) );
+        XDIR_MASK = digitalPinToBitMask(X_DIR_PIN);
+      }
+
+      if( gc.paramValid & P_Y ) {
+        Y_DIR_PIN = (byte)gc.y;
+        pinMode(Y_DIR_PIN, OUTPUT);
+        digitalWrite(Y_DIR_PIN, LOW);
+
+        YDIR_PORT = portOutputRegister( digitalPinToPort(Y_DIR_PIN) );
+        YDIR_MASK = digitalPinToBitMask(Y_DIR_PIN);
+      }
+
+      if( (gc.paramValid & P_Z) && gc.z != 0.0 ) {
+        Z_DIR_PIN = (byte)gc.z;
+        pinMode(Z_DIR_PIN, OUTPUT);
+        digitalWrite(Z_DIR_PIN, LOW);
+      }
+      break;
+
+    case '3': // min pin per axis
+      if( gc.paramValid & P_X ) {
+        X_MIN_PIN = (byte)gc.x;
+        pinMode(X_MIN_PIN, INPUT_PULLUP);
+      }
+
+      if( gc.paramValid & P_Y ) {
+        Y_MIN_PIN = (byte)gc.y;
+        pinMode(Y_MIN_PIN, INPUT_PULLUP);
+      }
+
+      if( (gc.paramValid & P_Z) && gc.z != 0.0 ) {
+        Z_MIN_PIN = (byte)gc.z;
+        pinMode(Z_MIN_PIN, INPUT_PULLUP);
+      }
+      break;
+
+    case '4': // max pin per axis
+      if( gc.paramValid & P_X ) {
+        X_MAX_PIN = (byte)gc.x;
+        pinMode(X_MAX_PIN, INPUT_PULLUP);
+      }
+
+      if( gc.paramValid & P_Y ) {
+        Y_MAX_PIN = (byte)gc.y;
+        pinMode(Y_MAX_PIN, INPUT_PULLUP);
+      }
+
+      if( (gc.paramValid & P_Z) && gc.z != 0.0 ) {
+        Z_MAX_PIN = (byte)gc.z;
+        pinMode(Z_MAX_PIN, INPUT_PULLUP);
+      }
+      break;
+
+    case '5': // servo enable
+      if( gc.paramValid & P_Z ) {
+        Z_ENABLE_SERVO = (byte)gc.z;
+      }
+      break;
+
+    case '6': // steps per mm per axis
+      if( gc.paramValid & P_X ) {
+        X_STEPS_PER_MM = gc.x * 0.5;
+        x_units = X_STEPS_PER_MM;
+        Serial.println(x_units);
+      }
+
+      if( gc.paramValid & P_Y ) {
+        Y_STEPS_PER_MM = gc.y * 0.5;
+        y_units = Y_STEPS_PER_MM;
+        Serial.println(y_units);
+      }
+
+      if( (gc.paramValid & P_Z) && gc.z != 0.0 ) {
+        Z_STEPS_PER_MM = gc.z;
+        z_units = Z_STEPS_PER_MM;
+        Serial.println(z_units);
+      }
+
+      UpdateFUnits();
+      break;
+
+    case '7': // fast feedrate per axis
+      if( gc.paramValid & P_X ) {
+        FAST_XY_FEEDRATE = gc.x;
+      }
+
+      if( gc.paramValid & P_Y ) {
+        FAST_XY_FEEDRATE = gc.y;
+      }
+
+      if( (gc.paramValid & P_Z) && gc.z != 0.0 ) {
+        FAST_Z_FEEDRATE = gc.z;
+      }
+      break;
+  }
+}
+
+
+void ParseIntegerTriple( char * instruction , byte & index , byte size , LongPoint & pt )
+{
+  pt.x = pt.y = pt.z = 0;
+  while( index < size ) {
+    switch( instruction[index] )
+    {
+      case 'X':
+      case 'x':
+        index++;
+        pt.x = GetInteger( instruction, index, size );
+        break;
+
+      case 'Y':
+      case 'y':
+        index++;
+        pt.y = GetInteger( instruction, index, size );
+        break;
+
+      case 'Z':
+      case 'z':
+        index++;
+        pt.z = GetInteger( instruction, index, size );
+        break;
+
+      case ' ':
+      case '\t':
+        index++;
+        break;
+
+    default:
+      return;
+    }
+  }
+}
+
+void ParseFloatTriple( char * instruction , byte & index , byte size , FloatPoint & ptf )
+{
+  ptf.x = ptf.y = ptf.z = 0.0;
+
+  instruction[size] = 0;
+  //Serial.println( instruction );
+
+  while( index < size )
+  {
+    switch( instruction[index] )
+    {
+      case 'X':
+      case 'x':
+        index++;
+        ptf.x = GetFloat( instruction, index, size );
+        break;
+
+      case 'Y':
+      case 'y':
+        index++;
+        ptf.y = GetFloat( instruction, index, size );
+        break;
+
+      case 'Z':
+      case 'z':
+        index++;
+        ptf.z = GetFloat( instruction, index, size );
+        break;
+
+      case ' ':
+      case '\t':
+        index++;
+        break;
+
+    default:
+      return;
+    }
+  }
+}
+
+
+void ParseGCodeParams( char * instruction, byte & index, byte size, GCodeParams & gc )
+{
+  gc.paramValid = 0;
+
+  while( index < size )
+  {
+    switch( instruction[index] )
+    {
+      case 'X':
+      case 'x':
+        index++;
+        gc.x = GetFloat( instruction, index, size );
+        gc.paramValid |= (1<<0);
+        //Serial.print( "  X: "); Serial.print( gc.x );
+        break;
+
+      case 'Y':
+      case 'y':
+        index++;
+        gc.y = GetFloat( instruction, index, size );
+        gc.paramValid |= (1<<1);
+        //Serial.print( "  Y: "); Serial.print( gc.y );
+        break;
+
+      case 'Z':
+      case 'z':
+        index++;
+        gc.z = GetFloat( instruction, index, size );
+        gc.paramValid |= (1<<2);
+        //Serial.print( "  Z: "); Serial.print( gc.z );
+        break;
+
+      /*
+      case 'I':
+      case 'i':
+        index++;
+        gc.i = GetFloat( instruction, index, size );
+        gc.paramValid |= (1<<3);
+        //Serial.print( "  I: "); Serial.print( gc.i );
+        break;
+
+      case 'J':
+      case 'j':
+        index++;
+        gc.j = GetFloat( instruction, index, size );
+        gc.paramValid |= (1<<4);
+        //Serial.print( "  J: "); Serial.print( gc.j );
+        break;
+
+      case 'K':
+      case 'k':
+        index++;
+        gc.k = GetFloat( instruction, index, size );
+        gc.paramValid |= (1<<5);
+        //Serial.print( "  K: "); Serial.print( gc.k );
+        break;
+
+      case 'F':
+      case 'f':
+        index++;
+        gc.f = GetFloat( instruction, index, size );
+        gc.paramValid |= (1<<6);
+        //Serial.print( "  F: "); Serial.print( gc.f );
+        break;
+      */
+
+      case ' ':
+      case '\t':
+        index++;
+        break;
+
+    default:
+      //Serial.print(" ??: " );
+      //Serial.println( (int)instruction[index] );
+      return;
+    }
+  }
+  //Serial.println("");
+}
+
+
+void ParseGCodeParams( char * instruction, byte & index, byte size, IGCodeParams & gc )
+{
+  gc.paramValid = 0;
+
+  while( index < size )
+  {
+    switch( instruction[index] )
+    {
+      case 'X':
+      case 'x':
+        index++;
+        gc.x = GetFixedInteger( instruction, index, size );
+        gc.paramValid |= (1<<0);
+        //Serial.print( "  X: "); Serial.print( gc.x );
+        break;
+
+      case 'Y':
+      case 'y':
+        index++;
+        gc.y = GetFixedInteger( instruction, index, size );
+        gc.paramValid |= (1<<1);
+        //Serial.print( "  Y: "); Serial.print( gc.y );
+        break;
+
+      case 'Z':
+      case 'z':
+        index++;
+        gc.z = GetFixedInteger( instruction, index, size );
+        gc.paramValid |= (1<<2);
+        //Serial.print( "  Z: "); Serial.print( gc.z );
+        break;
+
+      case 'I':
+      case 'i':
+        index++;
+        gc.i = GetFixedInteger( instruction, index, size );
+        gc.paramValid |= (1<<3);
+        //Serial.print( "  I: "); Serial.print( gc.i );
+        break;
+
+      case 'J':
+      case 'j':
+        index++;
+        gc.j = GetFixedInteger( instruction, index, size );
+        gc.paramValid |= (1<<4);
+        //Serial.print( "  J: "); Serial.print( gc.j );
+        break;
+
+      case 'K':
+      case 'k':
+        index++;
+        gc.k = GetFixedInteger( instruction, index, size );
+        gc.paramValid |= (1<<5);
+        //Serial.print( "  K: "); Serial.print( gc.k );
+        break;
+
+      case 'F':
+      case 'f':
+        index++;
+        gc.f = GetFixedInteger( instruction, index, size );
+        gc.paramValid |= (1<<6);
+        //Serial.print( "  F: "); Serial.print( gc.f );
+        break;
+
+      case ' ':
+      case '\t':
+        index++;
+        break;
+
+    default:
+      //Serial.print(" ??: " );
+      //Serial.println( (int)instruction[index] );
+      return;
+    }
+  }
+  //Serial.println("");
+}
+
+
+
+long GetInteger( char * instruction, byte & index , byte size )
+{
+  bool isNeg = false;
+  long res = 0;
+  if( instruction[index] == '-' ) {
+    isNeg = true;
+    index++;
+  }
+
+  while( index < size && (instruction[index] >= '0' && instruction[index] <= '9' )) {
+    res *= 10;
+    res += instruction[index++] - '0';
+  }
+
+  // if there was a decimal, skip it and any trailing digits
+  while( index < size )
+  {
+    char c = instruction[index];
+    if( c == '.' || (c >= '0' && c <= '9' )) {
+        index++;
+    }
+    else break;
+  }
+
+  if( isNeg ) res = -res;
+  return res;
+}
+
+void SkipNumber( char * instruction, byte & index , byte size )
+{
+  while( index < size ) {
+    char c = instruction[index];
+    if( c == '-' || c == '.' || (c>='0' && c <= '9') ) {
+      index++;
+    }
+    else
+      return;
+  }
+}
+
+
+long GetFloatAsInteger( char * instruction, byte & index , byte size , long & scale )
+{
+  bool isNeg = false, foundDec = false;
+  long res = 0;
+  scale = 1;
+
+  if( instruction[index] == '-' ) {
+    isNeg = true;
+    index++;
+  }
+
+  while( index < size )
+  {
+    char c = instruction[index];
+    if( c >= '0' && c <= '9' )
+    {
+      res *= 10;
+      res += (c - '0');
+      if( foundDec ) scale *= 10;
+      index++;
+    }
+    else if( c == '.' )
+    {
+      foundDec = true;
+      index++;
+    }
+    else
+      break;
+  }
+  if( isNeg ) res = -res;
+  return res;
+}
+
+float GetFloat( char * instruction, byte & index , byte size )
+{
+  long scale;
+  long res = GetFloatAsInteger(instruction, index, size, scale );
+  return (float)res / (float)scale;
+}
+
+
+// Returns everything scaled up by 1000
+long GetFixedInteger( char * instruction, byte & index , byte size )
+{
+  bool isNeg = false, foundDec = false;
+  long res = 0;
+  byte scale = 0;
+
+  if( instruction[index] == '-' ) {
+    isNeg = true;
+    index++;
+  }
+
+  while( index < size )
+  {
+    char c = instruction[index];
+    if( c >= '0' && c <= '9' )
+    {
+      if( scale < 3 ) {
+        res *= 10;
+        res += (c - '0');
+        if( foundDec ) scale++;
+      }
+      index++;
+    }
+    else if( c == '.' )
+    {
+      foundDec = true;
+      index++;
+    }
+    else
+      break;
+  }
+
+  while( scale < 3 ) {
+    res *= (byte)10;
+    scale++;
+  }
+
+  if( isNeg ) res = -res;
+  return res;
+}
+
+
 
 //look for the number that appears after the char key and return it
 double search_string(char key, char instruction[], int string_size)
 {
-	char temp[10] = "";
+  char temp[10] = "";
 
-	for (byte i=0; i<string_size; i++)
-	{
-		if (instruction[i] == key)
-		{
-			i++;      
-			int k = 0;
-			while (i < string_size && k < 10)
-			{
-				if (instruction[i] == 0 || instruction[i] == ' ')
-					break;
+  for (byte i = 0; i < string_size; i++)
+  {
+    if (instruction[i] == key)
+    {
+      i++;
+      int k = 0;
+      while (i < string_size && k < 10)
+      {
+        if (instruction[i] == 0 || instruction[i] == ' ')
+          break;
 
-				temp[k] = instruction[i];
-				i++;
-				k++;
-			}
-			return strtod(temp, NULL);
-		}
-	}
-	
-	return 0;
+        temp[k] = instruction[i];
+        i++;
+        k++;
+      }
+      return strtod(temp, NULL);
+    }
+  }
+
+  return 0;
 }
 
 //look for the command if it exists.
 bool has_command(char key, char instruction[], int string_size)
 {
-	for (byte i=0; i<string_size; i++)
-	{
-		if (instruction[i] == key)
-			return true;
-	}
-	
-	return false;
+  for (byte i = 0; i < string_size; i++)
+  {
+    if (instruction[i] == key)
+      return true;
+  }
+
+  return false;
 }
