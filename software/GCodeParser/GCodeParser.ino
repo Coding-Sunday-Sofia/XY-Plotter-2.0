@@ -1,16 +1,20 @@
+//#include <Wire.h>
+
+//#include <SoftwareSerial.h>
+
 
 // This code has been rewritten for speed by Jason Dorie
 
-#include "Makeblock.h"
+//#include "Makeblock.h"
 #include <Servo.h>
 
 // define the parameters of our machine.
 float X_STEPS_PER_INCH = 48;
-float X_STEPS_PER_MM = 350;
+float X_STEPS_PER_MM = 87.4125;
 int X_MOTOR_STEPS   = 100;
 
 float Y_STEPS_PER_INCH = 48;
-float Y_STEPS_PER_MM  = 350;
+float Y_STEPS_PER_MM  = 87.4125;
 int Y_MOTOR_STEPS   = 100;
 
 float Z_STEPS_PER_INCH = 48;
@@ -25,7 +29,7 @@ int FAST_Z_FEEDRATE = 5000;
 // RepRap opto endstops are *not* inverting.
 int SENSORS_INVERTING = 1;
 
-MeDCMotor laser(M2);
+//MeDCMotor laser(M2);
 
 // How many temperature samples to take.  each sample takes about 100 usecs.
 
@@ -92,9 +96,12 @@ void setup()
   init_process_string();
   init_steppers();
   process_string("G90", 3); //Absolute Position
-  Serial.println("start");
+  process_string("G21", 3); //Unit is mm
+  //Serial.println("start");
+  Serial.println("Grbl 0.8");
 
-  laser.run(0);
+
+  //laser.run(0);
 }
 
 void loop()

@@ -100,10 +100,12 @@ void SkipNumber( char * instruction, byte & index , byte size );
 
 void UpdateFUnits(void)
 {
+  //Serial.print("UpdateFUnits from:"); Serial.print(x_units); Serial.print(" "); Serial.print(y_units); Serial.print(" "); Serial.println(z_units);
   // GCode is parsed into *1000 units, 
   x_funits = (long)(x_units * 256.0 / 1000.0 * 1024.0 + 0.5);
   y_funits = (long)(y_units * 256.0 / 1000.0 * 1024.0 + 0.5);
   z_funits = (long)(z_units * 256.0 / 1000.0 * 1024.0 + 0.5);
+  //Serial.print("UpdateFfunits from:"); Serial.print(x_funits); Serial.print(" "); Serial.print(y_funits); Serial.print(" "); Serial.println(z_funits);
 }
 
 
@@ -244,7 +246,10 @@ void ParseGCodeInstruction( char * instruction, byte & index , byte size )
     case 0:
     case 1:
       set_ftarget(lp.x, lp.y, lp.z);
-      servo.write(lp.z)
+      //Serial.print(lp.x); Serial.print(" "); Serial.print(lp.y); Serial.print(" "); Serial.println(lp.z);
+      if( gc.paramValid & P_Z ) {
+        servo.write(lp.z);
+      }
 
       //adjust if we have a specific feedrate.
       if(Command == 1)

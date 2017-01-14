@@ -60,8 +60,8 @@ void init_steppers()
 
 	pinMode(Z_STEP_PIN, OUTPUT);
 	pinMode(Z_DIR_PIN, OUTPUT);
-	pinMode(Z_MIN_PIN, INPUT_PULLUP);
-	pinMode(Z_MAX_PIN, INPUT_PULLUP);
+	//pinMode(Z_MIN_PIN, INPUT_PULLUP);
+	//pinMode(Z_MAX_PIN, INPUT_PULLUP);
 	
 	//figure our stuff.
   calculate_fdeltas();
@@ -74,7 +74,7 @@ void set_laser_power(void)
   int lz = -(int)current_steps.z;
   if( lz < 0 ) lz = 0;
   if( lz > 255 ) lz = 255;
-  laser.run(lz);
+  //laser.run(lz);
 }
 
 
@@ -129,8 +129,6 @@ const byte ddaLoopOverhead = 30;       // estimated microseconds per loop to sub
 
 void dda_move(long micro_delay , byte rapid)
 {
-  //Serial.print( current_steps.x ); Serial.print(" " ); Serial.print( current_steps.y ); Serial.print(" " ); Serial.println( current_steps.z );
-  //Serial.print( target_steps.x  ); Serial.print(" " ); Serial.print( target_steps.y  ); Serial.print(" " ); Serial.println( target_steps.z  );
 
 	//figure out our deltas
 	max_delta = max(delta_steps.x, delta_steps.y);
@@ -138,6 +136,7 @@ void dda_move(long micro_delay , byte rapid)
 
   if( delta_steps.x == 0 && delta_steps.y == 0 ) {
     //rapid = 0; // don't do acceleration for Z - no need
+    Serial.println("Z only ,returning");
     return;
   }
 
@@ -177,7 +176,7 @@ void dda_move(long micro_delay , byte rapid)
     x_can_step = can_step(XMIN_PORT, XMIN_MASK, XMAX_PORT, XMAX_MASK, current_steps.x, target_steps.x, x_direction);
 		y_can_step = can_step(YMIN_PORT, YMIN_MASK, YMAX_PORT, YMAX_MASK, current_steps.y, target_steps.y, y_direction);
 
-		z_can_step = current_steps.z != target_steps.z; // no limits in Z because the laser is clamped
+		//z_can_step = current_steps.z != target_steps.z; // no limits in Z because the laser is clamped
 
 
 		if (x_can_step)
@@ -207,6 +206,7 @@ void dda_move(long micro_delay , byte rapid)
 			}
 		}
 		
+    /*
 		if (z_can_step)
 		{
 			z_counter += delta_steps.z;
@@ -222,6 +222,7 @@ void dda_move(long micro_delay , byte rapid)
         set_laser_power();
 			}
 		}
+    */
 
 		//wait for next step.
 		if (milli_delay > 0)
@@ -427,6 +428,7 @@ bool read_switch(volatile byte * port , byte pin)
 
 long to_fsteps(long steps_per_unit, long units)
 {
+  //Serial.print("to_fsteps("); Serial.print(steps_per_unit); Serial.println(units);
   long intRes = steps_per_unit * (units >> 8);
   long fracRes = steps_per_unit * (units & ((1<<8)-1));
 
