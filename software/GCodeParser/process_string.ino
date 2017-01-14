@@ -249,6 +249,7 @@ void ParseGCodeInstruction( char * instruction, byte & index , byte size )
       //Serial.print(lp.x); Serial.print(" "); Serial.print(lp.y); Serial.print(" "); Serial.println(lp.z);
       if( gc.paramValid & P_Z ) {
         servo.write(lp.z);
+        delay(100);
       }
 
       //adjust if we have a specific feedrate.

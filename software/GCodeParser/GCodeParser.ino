@@ -91,6 +91,7 @@ void setup()
   Serial.begin(115200);
   if (Z_ENABLE_SERVO == 1) {
     servo.attach(Z_STEP_PIN);
+    servo.write(0);
   }
   //other initialization.
   init_process_string();
