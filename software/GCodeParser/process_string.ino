@@ -244,6 +244,7 @@ void ParseGCodeInstruction( char * instruction, byte & index , byte size )
     case 0:
     case 1:
       set_ftarget(lp.x, lp.y, lp.z);
+      servo.write(lp.z)
 
       //adjust if we have a specific feedrate.
       if(Command == 1)
