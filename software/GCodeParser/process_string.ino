@@ -226,6 +226,7 @@ void ParseGCodeInstruction( char * instruction, byte & index , byte size )
         lp.y = current_funits.y;
       }
 
+      //Serial.print(gc.paramValid); Serial.print(" "); Serial.print(gc.z); Serial.print(" "); Serial.println(current_funits.z);
       if( gc.paramValid & P_Z ) {
         lp.z = gc.z;
       }
@@ -246,7 +247,7 @@ void ParseGCodeInstruction( char * instruction, byte & index , byte size )
     case 0:
     case 1:
       set_ftarget(lp.x, lp.y, lp.z);
-      //Serial.print(lp.x); Serial.print(" "); Serial.print(lp.y); Serial.print(" "); Serial.println(lp.z);
+      Serial.print(lp.x); Serial.print(" "); Serial.print(lp.y); Serial.print(" "); Serial.println(lp.z);
       if( gc.paramValid & P_Z ) {
         servo.write(lp.z);
         delay(100);
@@ -737,8 +738,15 @@ void ParseGCodeParams( char * instruction, byte & index, byte size, IGCodeParams
       case 'Z':
       case 'z':
         index++;
-        gc.z = GetFixedInteger( instruction, index, size );
+        // GetFixedInteger returns the value multiplied by 1000. 
+        // This is not so good for servo that can only go between 1 and 179
+        // So scale it down again
+        gc.z = GetFixedInteger( instruction, index, size ) / 1000;
         gc.paramValid |= (1<<2);
+        // And limit it for safety. 
+        // Accuracy is not super important for this application
+        if(gc.z >= 180) gc.z = 179;
+        else if(gc.z <= 0) gc.z = 1;
         //Serial.print( "  Z: "); Serial.print( gc.z );
         break;
 
@@ -868,6 +876,7 @@ float GetFloat( char * instruction, byte & index , byte size )
 {
   long scale;
   long res = GetFloatAsInteger(instruction, index, size, scale );
+//  Serial.print(res); Serial.print(" "); Serial.println(scale);
   return (float)res / (float)scale;
 }
 
