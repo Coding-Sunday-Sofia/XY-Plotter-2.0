@@ -2,7 +2,7 @@
 
 The package consists of the software(Arduino firmware and GRemote), structure assembly instruction and program instruction.
 
-###Brief Procedure
+### Brief Procedure
 
 1. Download and install Arduino-1.0.5，http://arduino.cc/en/Main/Software
 
@@ -22,7 +22,7 @@ The package consists of the software(Arduino firmware and GRemote), structure as
 
 For more details, please refer to the software instruction.
 
-###How to DIY
+### How to DIY
 
 If you want change the source code, you could find it in GRemotFull/source/GRemote.pde.
 
@@ -32,4 +32,4 @@ If you want change the source code, you could find it in GRemotFull/source/GRemo
 
 [![alt text](images/XY Plotter 2.0.jpg "Makeblock XY Plotter 2.0")](http://www.makeblock.cc/xy-plotter-robot-kit-2-0/)
 
-###Learn more from Makeblock official website: www.makeblock.com
+### Learn more from Makeblock official website: www.makeblock.com
