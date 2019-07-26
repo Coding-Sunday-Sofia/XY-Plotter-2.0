@@ -16,7 +16,13 @@ This repo also fixes an important bug that sometimes causes spurious circles or 
 Pull requests have been made to the official repository, but it seems to be no longer maintained.
 Which is a pity because the plotter results can be stunning!
 
-In GRemoteFull, I've set X PPM, Y PPM to 350 to get an exact correspondence between measures in inkscape and measures on paper.
+In GRemoteFull, 
+ 1. I've set X PPM, Y PPM to 350 to get an exact correspondence between measures in inkscape and measures on paper.
+ 2. Settings: set up correct pin assignments:
+  * X DIR = 11; Y DIR = 3; Z DIR = -1 (not used); X PPM = 350
+  * X STEP = 10; Y STEP = 9; Z STEP = 15; Y PPM = 350
+  * X MIN = 16; YMIN = 13; Z MIN = -1 (not used); Z PPM = 350
+  * Z MAX = 17; Y MAX = 12; ZMAX = -1 (not used)
 
 [![alt text](images/Logo.png "Makeblock Logo") ](https://www.Makeblock.cc)
 
