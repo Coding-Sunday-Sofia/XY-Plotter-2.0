@@ -1,3 +1,21 @@
+### Note from shimpe:
+My makeblock plotter kit shipped with an arduino UNO based board instead of arduino Leonardo.
+Beware to choose arduino UNO when uploading the firmware from the arduino environment.
+
+In practice this also means that the pin assignments used by the arduino are different, so the firmware needs to be adapted for this. I got my arduino uno based plotter fully working with the code modifications in this repository.
+
+Because of this, changes were also needed in electrical connections:
+
+1. connect cable from port 7 to top of pen holder
+2. connect cable from port 6 (NOT 8!!!) to bottom pen holder (which itself is connected to the left and right limit switches: upper connector to the right limit switch, lower connector to the left limit switch)
+3. connect furthest limit switch (top right corner) to the LEFT side of the board that connects with port 3
+4. connect limit switch closest to the motors to the RIGHT side of the board that connects with port 3
+
+This repo also fixes an important bug that sometimes causes spurious circles or wrong paths to be drawn out of nowhere.
+
+Pull requests have been made to the official repository, but it seems to be no longer maintained.
+Which is a pity because the plotter results can be stunning!
+
 [![alt text](images/Logo.png "Makeblock Logo") ](https://www.Makeblock.cc)
 
 The package consists of the software(Arduino firmware and GRemote), structure assembly instruction and program instruction.
