@@ -16,6 +16,8 @@ This repo also fixes an important bug that sometimes causes spurious circles or 
 Pull requests have been made to the official repository, but it seems to be no longer maintained.
 Which is a pity because the plotter results can be stunning!
 
+In GRemoteFull, I've set X PPM, Y PPM to 350 to get an exact correspondence between measures in inkscape and measures on paper.
+
 [![alt text](images/Logo.png "Makeblock Logo") ](https://www.Makeblock.cc)
 
 The package consists of the software(Arduino firmware and GRemote), structure assembly instruction and program instruction.
