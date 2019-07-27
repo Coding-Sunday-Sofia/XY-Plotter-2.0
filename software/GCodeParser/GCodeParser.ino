@@ -1,11 +1,11 @@
 #include <Servo.h>
 // define the parameters of our machine.
-float X_STEPS_PER_INCH = 8890;
-float X_STEPS_PER_MM = 350;
+float X_STEPS_PER_MM = 352.7981859410431;
+float X_STEPS_PER_INCH = 352.7981859410431*25.4;
 int X_MOTOR_STEPS   = 100;
 
-float Y_STEPS_PER_INCH = 8890;
-float Y_STEPS_PER_MM  = 350;
+float Y_STEPS_PER_MM  = 385.24005486968446;
+float Y_STEPS_PER_INCH = 385.24005486968446*25.4;
 int Y_MOTOR_STEPS   = 100;
 
 float Z_STEPS_PER_INCH = 8890;
