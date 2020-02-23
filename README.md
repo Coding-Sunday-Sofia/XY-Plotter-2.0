@@ -1,3 +1,29 @@
+### Note from shimpe:
+My makeblock plotter kit shipped with an arduino UNO based board instead of arduino Leonardo.
+Beware to choose arduino UNO when uploading the firmware from the arduino environment.
+
+In practice this also means that the pin assignments used by the arduino are different, so the firmware needs to be adapted for this. I got my arduino uno based plotter fully working with the code modifications in this repository.
+
+Because of this, changes were also needed in electrical connections:
+
+1. connect cable from port 7 to top of pen holder
+2. connect cable from port 6 (NOT 8!!!) to bottom pen holder (which itself is connected to the left and right limit switches: upper connector to the right limit switch, lower connector to the left limit switch)
+3. connect furthest limit switch (top right corner) to the LEFT side of the board that connects with port 3
+4. connect limit switch closest to the motors to the RIGHT side of the board that connects with port 3
+
+This repo also fixes an important bug that sometimes causes spurious circles or wrong paths to be drawn out of nowhere.
+
+Pull requests have been made to the official repository, but it seems to be no longer maintained.
+Which is a pity because the plotter results can be stunning!
+
+In GRemoteFull, 
+ 1. I've set X PPM, Y PPM to 350 to get an exact correspondence between measures in inkscape and measures on paper.
+ 2. Settings: set up correct pin assignments:
+  * X DIR = 11; Y DIR = 3; Z DIR = -1 (not used); X PPM = 350
+  * X STEP = 10; Y STEP = 9; Z STEP = 15; Y PPM = 350
+  * X MIN = 16; YMIN = 13; Z MIN = -1 (not used); Z PPM = 350
+  * Z MAX = 17; Y MAX = 12; ZMAX = -1 (not used)
+
 [![alt text](images/Logo.png "Makeblock Logo") ](https://www.Makeblock.cc)
 
 The package consists of the software(Arduino firmware and GRemote), structure assembly instruction and program instruction.
