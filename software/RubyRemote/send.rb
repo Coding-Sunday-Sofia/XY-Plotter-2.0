@@ -2,7 +2,7 @@ require "serialport"
 
 sample_file = 'Makeblock-pencil G-code examples.cnc'
 
-port_str = "/dev/tty.usbmodem1421"  #may be different for you
+port_str = "/dev/cu.wchusbserialfa130"  #may be different for you
 baud_rate = 115200
 data_bits = 8
 stop_bits = 1
@@ -16,7 +16,7 @@ begin
   file.each do |line|
     sp.write(line)
     puts "#{line}\n\r"
-    sleep 0.1
+    sleep 0.2
   end
 rescue Exception => e
   puts e
