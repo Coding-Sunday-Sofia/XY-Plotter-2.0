@@ -38,7 +38,7 @@ void init_process_string()
   //init our command
   for (byte i = 0; i < COMMAND_SIZE; i++)
     commands[i] = 0;
-  serial_count = 0;
+  commandsLength = 0;
 }
 
 //our feedrate variables.
@@ -62,7 +62,6 @@ void process_string(char instruction[], int size)
   fp.z = 0.0;
 
   byte code = 0;
-
 
   //did we get a gcode?
   if (!has_command('$', instruction, size) && (
@@ -468,7 +467,7 @@ double search_string(char key, char instruction[], int string_size)
         i++;
         k++;
       }
-      temp[k] = 0; // properly terminate char* 
+      temp[k] = 0; // properly terminate char*
       return strtod(temp, NULL);
     }
   }
